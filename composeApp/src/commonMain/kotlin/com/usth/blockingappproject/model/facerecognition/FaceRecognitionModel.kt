@@ -1,17 +1,14 @@
-package com.usth.blockingappproject.model.face
+@file:Suppress("unused")
+package com.usth.blockingappproject.model.facerecognition
 
-import kotlinx.serialization.Serializable
+/**
+ * DEPRECATED: Backward compatibility aliases.
+ * 
+ * Use [com.usth.blockingappproject.model.api] directly for new code.
+ */
 
-@Serializable
-data class FaceVerificationRequest(
-    val deviceId: String,
-    val faceEmbedding: List<Float> // vector from ML Kit
-)
+@Deprecated("Use FaceVerificationRequest from model.api", ReplaceWith("FaceVerificationRequest", "com.usth.blockingappproject.model.api.FaceVerificationRequest"))
+typealias FaceVerificationRequest = com.usth.blockingappproject.model.api.FaceVerificationRequest
 
-@Serializable
-data class FaceVerificationResponse(
-    val isMatch: Boolean,
-    val matchedProfileId: Int?,
-    val confidence: Float, // 0.0 to 1.0
-    val authToken: String? // Temp token for the identified user
-)
+@Deprecated("Use FaceVerificationResponse from model.api", ReplaceWith("FaceVerificationResponse", "com.usth.blockingappproject.model.api.FaceVerificationResponse"))
+typealias FaceVerificationResponse = com.usth.blockingappproject.model.api.FaceVerificationResponse

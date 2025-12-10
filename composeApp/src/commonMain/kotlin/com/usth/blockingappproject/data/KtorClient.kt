@@ -9,43 +9,78 @@ import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
 
+/**
+ * Singleton HTTP client configured for the FocusGuard API.
+ * 
+ * Features:
+ * - JSON serialization with kotlinx.serialization
+ * - Automatic auth token injection
+ * - Request/response logging (debug builds)
+ * - Configurable timeouts
+ * 
+ * Usage:
+ * ```
+ * // After login, set the token
+ * KtorClient.authToken = response.token
+ * 
+ * // All subsequent requests auto-include Authorization header
+ * val data = KtorClient.client.get("...").body<MyData>()
+ * ```
+ */
 object KtorClient {
     
-    // Store this token in a local DB or Settings after login
+    /**
+     * JWT token for authenticated requests.
+     * Set this after successful login; cleared on logout.
+     * 
+     * When set, all requests will include: `Authorization: Bearer <token>`
+     */
     var authToken: String? = null
 
+    /**
+     * Pre-configured HTTP client instance.
+     * Use this for all API calls to ensure consistent configuration.
+     */
     val client = HttpClient {
-        // JSON configuration
+        // JSON serialization/deserialization
         install(ContentNegotiation) {
             json(Json {
-                prettyPrint = true
-                isLenient = true
-                ignoreUnknownKeys = true // CRITICAL for production: Prevents crash if backend adds new fields
+                prettyPrint = true           // Readable logs
+                isLenient = true             // Accept slightly malformed JSON
+                ignoreUnknownKeys = true     // Don't crash if server adds new fields
+                encodeDefaults = true        // Include default values in requests
             })
         }
 
-        // Timeout configuration 
+        // Network timeouts
         install(HttpTimeout) {
-            requestTimeoutMillis = 15000
-            connectTimeoutMillis = 10000
-            socketTimeoutMillis = 15000
+            requestTimeoutMillis = 30_000   // Overall request timeout
+            connectTimeoutMillis = 10_000   // Time to establish connection
+            socketTimeoutMillis = 15_000    // Time between data packets
         }
 
-        // Network call logging
+        // Logging for debugging (disable in production or use BuildConfig flag)
         install(Logging) {
-            level = LogLevel.ALL 
-            logger = Logger.SIMPLE
+            level = LogLevel.BODY           // Log full request/response bodies
+            logger = Logger.SIMPLE          // Use simple console logger
         }
 
-        // Default headers (Auto-inject Token)
+        // Default headers for all requests
         defaultRequest {
             contentType(ContentType.Application.Json)
             accept(ContentType.Application.Json)
             
-            // If we have a logged-in user, send their token
+            // Auto-inject auth token if available
             authToken?.let { token ->
                 header(HttpHeaders.Authorization, "Bearer $token")
             }
         }
+    }
+
+    /**
+     * Clear auth state (call on logout).
+     */
+    fun clearAuth() {
+        authToken = null
     }
 }

@@ -1,21 +1,34 @@
+package com.usth.blockingappproject.network
+
+import com.usth.blockingappproject.config.AppConfig
+import com.usth.blockingappproject.data.network.KtorClient
+import com.usth.blockingappproject.model.api.*
 import io.ktor.client.call.*
 import io.ktor.client.request.*
 import io.ktor.http.*
-import com.usth.blockingappproject.model.* // Import your models
 
+/**
+ * High-level API service for common operations.
+ * 
+ * This is a simplified alternative to [FocusGuardApi] for basic use cases.
+ * Consider using [FocusGuardApi] for more complete API coverage.
+ */
 class ApiService {
-    // 10.0.2.2 is the localhost for Android Emulator. 
-    // If testing on Web, use "http://localhost:8080"
-    // Ideally, put this in a config file.
-    private val BASE_URL = "http://10.0.2.2:8080" 
+    private val client = KtorClient.client
+    private val baseUrl = AppConfig.BASE_URL
 
-    suspend fun login(request: LoginRequest): Result<LoginResponse> {
+    /**
+     * Authenticate user and obtain session token.
+     */
+    suspend fun login(request: LoginRequest): Result<AuthResponse> {
         return try {
-            val response: LoginResponse = httpClient.post("$BASE_URL/auth/login") {
+            val response: AuthResponse = client.post("$baseUrl/auth/login") {
                 contentType(ContentType.Application.Json)
                 setBody(request)
             }.body()
             
+            // Store token for subsequent requests
+            KtorClient.authToken = response.token
             Result.success(response)
         } catch (e: Exception) {
             e.printStackTrace()
@@ -25,9 +38,9 @@ class ApiService {
 
     suspend fun checkAppAccess(packageName: String, userId: Int): Boolean {
         return try {
-            val response: CheckAccessResponse = httpClient.post("$BASE_URL/rules/check") {
+            val response: AccessCheckResponse = client.post("$baseUrl/rules/check") {
                 contentType(ContentType.Application.Json)
-                setBody(CheckAccessRequest(packageName, userId))
+                setBody(AccessCheckRequest(userId, packageName))
             }.body()
             
             response.isAllowed

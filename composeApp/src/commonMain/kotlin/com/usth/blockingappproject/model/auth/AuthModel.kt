@@ -1,26 +1,20 @@
-import kotlinx.serialization.Serializable
+@file:Suppress("unused")
+package com.usth.blockingappproject.model.auth
 
-@Serializable
-data class LoginRequest(
-    val email: String,
-    val password: String
-)
+/**
+ * DEPRECATED: Backward compatibility aliases.
+ * 
+ * Use [com.usth.blockingappproject.model.api] directly for new code.
+ */
 
-@Serializable
-data class LoginResponse(
-    val token: String,
-    val userId: Int,
-    val role: String 
-)
+@Deprecated("Use LoginRequest from model.api", ReplaceWith("LoginRequest", "com.usth.blockingappproject.model.api.LoginRequest"))
+typealias LoginRequest = com.usth.blockingappproject.model.api.LoginRequest
 
-@Serializable
-data class CheckAccessRequest(
-    val packageName: String,
-    val userId: Int
-)
+@Deprecated("Use AuthResponse from model.api", ReplaceWith("AuthResponse", "com.usth.blockingappproject.model.api.AuthResponse"))
+typealias LoginResponse = com.usth.blockingappproject.model.api.AuthResponse
 
-@Serializable
-data class CheckAccessResponse(
-    val isAllowed: Boolean,
-    val reason: String? = null
-)
+@Deprecated("Use AccessCheckRequest from model.api", ReplaceWith("AccessCheckRequest", "com.usth.blockingappproject.model.api.AccessCheckRequest"))
+typealias CheckAccessRequest = com.usth.blockingappproject.model.api.AccessCheckRequest
+
+@Deprecated("Use AccessCheckResponse from model.api", ReplaceWith("AccessCheckResponse", "com.usth.blockingappproject.model.api.AccessCheckResponse"))
+typealias CheckAccessResponse = com.usth.blockingappproject.model.api.AccessCheckResponse

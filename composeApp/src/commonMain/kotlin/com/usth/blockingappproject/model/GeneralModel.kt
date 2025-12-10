@@ -1,53 +1,29 @@
+@file:Suppress("unused")
 package com.usth.blockingappproject.data.model
 
-import kotlinx.serialization.Serializable
+/**
+ * DEPRECATED: This file provides backward compatibility aliases.
+ * 
+ * All DTOs have been consolidated into [com.usth.blockingappproject.model.api.ApiDtos].
+ * New code should import directly from `model.api.*` instead.
+ * 
+ * This file will be removed in a future version.
+ */
 
-// Auth
-@Serializable
-data class AuthRequest(
-    val email: String,
-    val password: String,
-    val role: String? = null // "PARENT" or "CHILD", optional for Login
-)
+@Deprecated("Use LoginRequest from model.api", ReplaceWith("LoginRequest", "com.usth.blockingappproject.model.api.LoginRequest"))
+typealias AuthRequest = com.usth.blockingappproject.model.api.LoginRequest
 
-@Serializable
-data class AuthResponse(
-    val token: String,
-    val userId: Int,
-    val role: String,
-    val requiresFaceSetup: Boolean // To trigger Req 5 flow
-)
+@Deprecated("Use AuthResponse from model.api", ReplaceWith("AuthResponse", "com.usth.blockingappproject.model.api.AuthResponse"))
+typealias AuthResponse = com.usth.blockingappproject.model.api.AuthResponse
 
-// App rules
-@Serializable
-data class AppRuleDto(
-    val id: Int? = null,
-    val packageName: String, // "com.youtube"
-    val appName: String,     // "YouTube"
-    val dailyLimitMinutes: Int,
-    val isBlocked: Boolean,
-    val zoneId: Int? = null
-)
+@Deprecated("Use AppRuleDto from model.api", ReplaceWith("AppRuleDto", "com.usth.blockingappproject.model.api.AppRuleDto"))
+typealias AppRuleDto = com.usth.blockingappproject.model.api.AppRuleDto
 
-// Access check
-@Serializable
-data class AccessCheckRequest(
-    val userId: Int,
-    val packageName: String,
-    val latitude: Double? = null, // Nullable if GPS is off
-    val longitude: Double? = null
-)
+@Deprecated("Use AccessCheckRequest from model.api", ReplaceWith("AccessCheckRequest", "com.usth.blockingappproject.model.api.AccessCheckRequest"))
+typealias AccessCheckRequest = com.usth.blockingappproject.model.api.AccessCheckRequest
 
-@Serializable
-data class AccessCheckResponse(
-    val isAllowed: Boolean,
-    val remainingTimeMinutes: Int,
-    val reason: String? = null // e.g., "Blocked by Location Zone: School"
-)
+@Deprecated("Use AccessCheckResponse from model.api", ReplaceWith("AccessCheckResponse", "com.usth.blockingappproject.model.api.AccessCheckResponse"))
+typealias AccessCheckResponse = com.usth.blockingappproject.model.api.AccessCheckResponse
 
-// Face Recognition
-@Serializable
-data class FaceVerificationRequest(
-    val userId: Int,
-    val faceEmbedding: List<Float> // The vector data from ML Kit
-)
+@Deprecated("Use FaceVerificationRequest from model.api", ReplaceWith("FaceVerificationRequest", "com.usth.blockingappproject.model.api.FaceVerificationRequest"))
+typealias FaceVerificationRequest = com.usth.blockingappproject.model.api.FaceVerificationRequest
