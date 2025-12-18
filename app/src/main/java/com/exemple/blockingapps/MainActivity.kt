@@ -14,7 +14,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts // <-- QUAN TRỌNG
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -39,7 +39,6 @@ import com.google.android.gms.location.Priority
 class MainActivity : ComponentActivity() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-    // 1. Khai báo trình xử lý xin quyền Vị trí
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -57,21 +56,19 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.O)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        BlockState.isGeofenceActive = false
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         enableEdgeToEdge()
 
-        // GỌI XIN QUYỀN VỊ TRÍ ĐẦU TIÊN
         askLocationPermissions()
 
-        // CÁC QUYỀN CŨ CỦA BÁC
         askBatteryOptimizationPermission()
         askOverlayPermission()
         askAccessibilityPermission()
 
         val userRepository = UserRepository(FakeLocalDatabase)
-        BlockState.blockedPackages = FakeLocalDatabase.loadBlockedPackages()
+        BlockState.blockedPackages = FakeLocalDatabase.loadBlockedPackages(this)
 
-        startLocationUpdates()
         setContent {
             BlockingAppsTheme {
                 val navController = rememberNavController()
@@ -90,43 +87,7 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    @SuppressLint("MissingPermission")
-    private fun startLocationUpdates() {
-        // 1. Giảm thời gian quét xuống 2 giây cho nhanh để test (sau này chỉnh lại 10s sau)
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
-            .build()
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult) {
-                val location = locationResult.lastLocation ?: return
-
-                // Kiểm tra xem bác đã nhấn nút KÍCH HOẠT trên Map chưa
-                if (BlockState.targetLat != 0.0) {
-                    val results = FloatArray(1)
-
-                    // TỰ TÍNH KHOẢNG CÁCH (Không dùng GeofenceHelper nữa cho chắc)
-                    android.location.Location.distanceBetween(
-                        location.latitude,
-                        location.longitude,
-                        BlockState.targetLat,
-                        BlockState.targetLng,
-                        results
-                    )
-
-                    val distance = results[0]
-                    // Cập nhật trạng thái vùng học tập
-                    BlockState.isInStudyZone = distance <= 200f
-
-                    // --- DÒNG LOG QUAN TRỌNG NHẤT ĐỂ KIỂM TRA ---
-                    // Bác dùng Log.e để nó hiện màu ĐỎ trong Logcat cho dễ nhìn
-                    Log.e("GEO_CHECK", "KC: $distance m | Trong vùng: ${BlockState.isInStudyZone} | App cần chặn: ${BlockState.restrictedApps.size}")
-                } else {
-                    Log.d("GEO_CHECK", "Chưa chọn vị trí trên Map (targetLat = 0)")
-                }
-            }
-        }, Looper.getMainLooper())
-    }
-    // --- HÀM XIN QUYỀN VỊ TRÍ (MỚI) ---
     private fun askLocationPermissions() {
         locationPermissionRequest.launch(arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -136,12 +97,9 @@ class MainActivity : ComponentActivity() {
 
     private fun askBackgroundLocationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Kiểm tra xem đã có quyền chạy ngầm chưa
             val hasBackgroundLocation = checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
             if (!hasBackgroundLocation) {
-                // Hiển thị thông báo giải thích cho người dùng hoặc mở thẳng cài đặt
                 Log.d("GEO", "Cần quyền Background Location. Đang mở cài đặt...")
-                // Lưu ý: Android 11+ yêu cầu người dùng tự tay chọn "Allow all the time"
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = Uri.parse("package:$packageName")
                 }
@@ -150,7 +108,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- CÁC HÀM CŨ CỦA BÁC GIỮ NGUYÊN ---
     @SuppressLint("ServiceCast")
     private fun askBatteryOptimizationPermission() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager

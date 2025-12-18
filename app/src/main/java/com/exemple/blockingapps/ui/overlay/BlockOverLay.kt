@@ -26,7 +26,6 @@ class BlockOverlay(private val context: Context) {
         if (composeView != null) return
 
         composeView = ComposeView(context).apply {
-            // Quan trọng: Để Compose chạy được trong WindowManager, phải set mấy cái Owner này
             setupViewOwners(this)
 
             setContent {
@@ -37,10 +36,10 @@ class BlockOverlay(private val context: Context) {
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, // ĐỔI THÀNH CÁI NÀY
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or // Giúp tràn màn hình
+                    WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or
                     WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
             PixelFormat.TRANSLUCENT
         ).apply {
@@ -55,7 +54,7 @@ class BlockOverlay(private val context: Context) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.9f)), // Nền đen mờ 90%
+                .background(Color.Black.copy(alpha = 0.9f)),
             contentAlignment = Alignment.Center
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -85,7 +84,6 @@ class BlockOverlay(private val context: Context) {
         }
     }
 
-    // Hàm bổ trợ để Compose không bị crash khi chạy ngoài Activity
     private fun setupViewOwners(view: ComposeView) {
         val lifecycleOwner = object : LifecycleOwner {
             override val lifecycle = LifecycleRegistry(this).apply {

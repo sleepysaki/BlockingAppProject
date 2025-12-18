@@ -81,7 +81,6 @@ fun HomeScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
-            // Feature tiles
             val featuresParent = listOf(
                 FeatureTile("Family Members", "View and manage child devices", onNavigateToFamily),
                 FeatureTile("Blocked Apps", "Manage blocked apps and schedules", onNavigateToBlockedApps),
@@ -124,7 +123,6 @@ fun HomeScreen(
 
             item { Spacer(Modifier.height(12.dp)) }
 
-            // Devices list
             item {
                 Text("Linked devices", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 Spacer(Modifier.height(6.dp))

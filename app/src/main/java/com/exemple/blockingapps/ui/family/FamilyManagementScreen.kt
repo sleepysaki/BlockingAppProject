@@ -68,7 +68,6 @@ fun FamilyManagementScreen(viewModel: HomeViewModel) {
             AddDeviceDialog(
                 onDismiss = { showAddDeviceDialog = false },
                 onAddDevice = { deviceName ->
-                    // Tạo ID tạm thời, trong thực tế sẽ lấy từ server/database
                     val newDeviceId = UUID.randomUUID().toString().substring(0, 8)
                     viewModel.addDevice(deviceName, newDeviceId)
                     showAddDeviceDialog = false
@@ -78,16 +77,13 @@ fun FamilyManagementScreen(viewModel: HomeViewModel) {
     }
 }
 
-// File: ui/device/DeviceManagementScreen.kt (Cập nhật DeviceCard)
 
 @Composable
 fun DeviceCard(device: DeviceItem, onRemoveClicked: () -> Unit) {
-    // Giả định: Sử dụng trạng thái isConnected để quyết định màu và Icon
-    // Lưu ý: Dữ liệu mẫu trong HomeViewModel cần được cập nhật trường isConnected thành true/false
+
     val isOnline = device.isConnected
 
-    // Màu sắc và Icon dựa trên trạng thái kết nối
-    val statusColor = if (isOnline) Color(0xFF4CAF50) else Color.Gray // Xanh lá nếu Online, Xám nếu Offline
+    val statusColor = if (isOnline) Color(0xFF4CAF50) else Color.Gray
     val statusIcon = if (isOnline) Icons.Default.SignalCellular4Bar else Icons.Default.SignalCellularOff
 
     Card(
@@ -101,7 +97,6 @@ fun DeviceCard(device: DeviceItem, onRemoveClicked: () -> Unit) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                // ICON TRẠNG THÁI KẾT NỐI (Signal/Cellular Icon)
                 Icon(
                     imageVector = statusIcon,
                     contentDescription = "Trạng thái",
@@ -112,24 +107,20 @@ fun DeviceCard(device: DeviceItem, onRemoveClicked: () -> Unit) {
                 Column {
                     Text(device.deviceName, style = MaterialTheme.typography.titleMedium)
 
-                    // HIỂN THỊ TRẠNG THÁI RÕ RÀNG
                     Text(
                         text = if (isOnline) "TRỰC TUYẾN" else "Ngoại tuyến",
                         color = statusColor,
                         style = MaterialTheme.typography.labelMedium
                     )
 
-                    // Chỉ hiển thị "Hoạt động cuối" khi thiết bị ngoại tuyến
                     if (!isOnline) {
                         Text("Hoạt động cuối: ${device.lastActive}", style = MaterialTheme.typography.bodySmall)
                     } else {
-                        // Thêm một dòng cho thiết bị đang online
                         Text("Kết nối ổn định", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
                     }
                 }
             }
 
-            // Nút xóa thiết bị
             IconButton(onClick = onRemoveClicked) {
                 Icon(Icons.Default.Delete, contentDescription = "Xóa Thiết bị", tint = MaterialTheme.colorScheme.error)
             }

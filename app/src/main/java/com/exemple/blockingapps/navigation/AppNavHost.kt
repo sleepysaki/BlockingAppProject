@@ -37,7 +37,6 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         startDestination = Routes.LOGIN
     ) {
 
-        // LOGIN
         composable(Routes.LOGIN) {
             LoginScreen(
                 onLoginSuccess = {

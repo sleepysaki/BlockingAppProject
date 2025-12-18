@@ -18,9 +18,8 @@ class GeoBlockViewModel : ViewModel() {
     val appList = _appList.asStateFlow()
 
     fun getInstalledApps(context: Context) {
-        viewModelScope.launch(Dispatchers.IO) { // Chạy ở luồng phụ cho mượt
+        viewModelScope.launch(Dispatchers.IO) {
             val pm = context.packageManager
-            // Lấy tất cả app, bao gồm cả app có Launcher (để hiện icon ra màn hình)
             val intent = Intent(Intent.ACTION_MAIN, null).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             }
@@ -33,7 +32,7 @@ class GeoBlockViewModel : ViewModel() {
                     icon = info.loadIcon(pm),
                     isSelected = false
                 )
-            }.filter { it.packageName != context.packageName } // Loại bỏ chính app của mình để tránh tự khóa
+            }.filter { it.packageName != context.packageName }
                 .sortedBy { it.name }
 
             _appList.value = apps

@@ -71,7 +71,7 @@ fun UsageHistoryScreen(viewModel: HomeViewModel) {
     }
 }
 
-// --- MÀN HÌNH 1: CHỌN THIẾT BỊ ---
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DeviceSelectionScreen(
@@ -123,7 +123,7 @@ fun DeviceSelectionScreen(
 fun HistoryDetailScreen(
     devices: List<DeviceItem>,
     selectedDeviceId: String,
-    historyData: List<DailyUsageSummary?>?, // List 7 ngày từ ViewModel
+    historyData: List<DailyUsageSummary?>?,
     onBack: () -> Unit
 ) {
     val deviceName = devices.find { it.deviceId == selectedDeviceId }?.deviceName ?: "Thiết bị không xác định"
@@ -156,14 +156,12 @@ fun HistoryDetailScreen(
                     .padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 2. PHẦN ĐIỀU HƯỚNG NGÀY (NEXT/BACK)
                 item {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                         horizontalArrangement = Arrangement.Center,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Nút Back (Lùi về quá khứ - tăng index)
                         IconButton(
                             onClick = { if (dayIndex < (historyData?.size?.minus(1) ?: 0)) dayIndex++ },
                             enabled = dayIndex < (historyData?.size?.minus(1) ?: 0)
@@ -178,7 +176,6 @@ fun HistoryDetailScreen(
                             modifier = Modifier.padding(horizontal = 16.dp)
                         )
 
-                        // Nút Next (Tiến về hiện tại - giảm index)
                         IconButton(
                             onClick = { if (dayIndex > 0) dayIndex-- },
                             enabled = dayIndex > 0
@@ -188,7 +185,6 @@ fun HistoryDetailScreen(
                     }
                 }
 
-                // 3. NỘI DUNG THỐNG KÊ (Chỉ hiện của ngày đang chọn)
                 item { UsageSummaryCard(currentSummary) }
                 item { UsageBarChart(currentSummary.hourlyUsage) }
                 item { UsageCategoryBreakdown(currentSummary.categories) }
@@ -250,7 +246,7 @@ fun UsageSummaryCard(summary: DailyUsageSummary) {
 
 @Composable
 fun UsageBarChart(hourlyUsage: List<Int>) {
-    val maxUsage = (hourlyUsage.maxOrNull() ?: 1).coerceAtLeast(60) // Tối thiểu lấy mốc 60p để căn tỷ lệ
+    val maxUsage = (hourlyUsage.maxOrNull() ?: 1).coerceAtLeast(60)
 
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp)) {
         Row(
@@ -277,7 +273,6 @@ fun UsageBarChart(hourlyUsage: List<Int>) {
             }
         }
 
-        // Hiển thị nhãn giờ dưới chân (0h, 4h, 8h, 12h, 16h, 20h, 23h)
         Row(
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween
@@ -345,7 +340,6 @@ fun TopAppUsageRow(record: UsageRecord, totalTime: Int) {
 
                 Spacer(Modifier.height(6.dp))
 
-                // THANH BIỂU HIỆN THỜI GIAN DÙNG CỦA APP
                 val progress = (record.totalMinutes.toFloat() / totalTime).coerceIn(0f, 1f)
                 Box(
                     modifier = Modifier

@@ -5,11 +5,9 @@ import android.util.Log
 import com.exemple.blockingapps.data.common.BlockState
 
 object GeofenceHelper {
-    // Hàm này sẽ được gọi liên tục để kiểm tra
     fun checkLocationAndBlock(currentLat: Double, currentLng: Double, targetLat: Double, targetLng: Double, radius: Float) {
         val results = FloatArray(1)
 
-        // Tính khoảng cách giữa vị trí hiện tại và điểm đã chọn trên Map (trả về mét)
         Location.distanceBetween(currentLat, currentLng, targetLat, targetLng, results)
         val distanceInMeters = results[0]
 
