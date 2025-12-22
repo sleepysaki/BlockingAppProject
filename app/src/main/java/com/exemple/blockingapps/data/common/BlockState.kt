@@ -1,4 +1,3 @@
-// File: com.exemple.blockingapps.data.common/BlockState.kt
 
 package com.exemple.blockingapps.data.common
 

@@ -1,6 +1,5 @@
 package com.exemple.blockingapps.navigation
 
-import LoginScreen
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
@@ -15,6 +14,7 @@ import com.exemple.blockingapps.ui.history.RecommendationScreen
 import com.exemple.blockingapps.ui.history.UsageHistoryScreen
 import com.exemple.blockingapps.ui.home.HomeScreen
 import com.exemple.blockingapps.ui.home.HomeViewModel
+import com.exemple.blockingapps.ui.login.LoginScreen
 
 object Routes {
     const val LOGIN = "login"
@@ -30,69 +30,28 @@ object Routes {
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
-fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
-    val context = androidx.compose.ui.platform.LocalContext.current
-    NavHost(
-        navController = navController,
-        startDestination = Routes.LOGIN
-    ) {
+fun AppNavHost(
+    navController: NavHostController,
+    homeViewModel: HomeViewModel
+) {
+    NavHost(navController = navController, startDestination = "login") { // Đổi start thành login
 
-        // LOGIN
-        composable(Routes.LOGIN) {
-            LoginScreen(
-                onLoginSuccess = {
-                    navController.navigate(Routes.HOME) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
-                    }
+        // Màn hình Login
+        composable("login") {
+            LoginScreen(onLoginSuccess = {
+                // Khi login xong thì chuyển sang Home và xóa Login khỏi BackStack (để back không quay lại login)
+                navController.navigate("home") {
+                    popUpTo("login") { inclusive = true }
                 }
-            )
+            })
         }
 
-        composable(Routes.HOME) {
-            HomeScreen(
-                onNavigateToFamily = { navController.navigate(Routes.FAMILY) },
-                onNavigateToBlockedApps = { navController.navigate(Routes.BLOCKED) },
-                onNavigateToTimeLimit = { navController.navigate(Routes.TIMELIMIT) },
-                onNavigateToHistory = { navController.navigate(Routes.HISTORY) },
-                onNavigateToRecommend = {
-                    homeViewModel.loadRealUsageAndGenerateRecs(context)
-                    navController.navigate(Routes.RECOMMEND)
-                },
-                onNavigateToFace = { navController.navigate(Routes.FACE) },
-                onNavigateToGeoBlock = { navController.navigate(Routes.GEOBLOCK) },
-                onLogout = {
-                    navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.HOME) { inclusive = true }
-                    }
-                }
-            )
-        }
-
-        composable(Routes.BLOCKED) {
-            BlockedAppsScreen()
-        }
-
-        composable(Routes.FAMILY) {
-            FamilyManagementScreen(viewModel = homeViewModel)
-        }
-        composable(Routes.TIMELIMIT) { }
-        composable(Routes.HISTORY) {
-            UsageHistoryScreen(viewModel = homeViewModel)
-        }
-        composable(Routes.RECOMMEND) {
-            RecommendationScreen(
-                viewModel = homeViewModel,
-                onBack = { navController.popBackStack() }
-            )
-        }
-        composable(Routes.FACE) {  }
-        composable(Routes.GEOBLOCK) {
-            val geoViewModel: GeoBlockViewModel = viewModel()
-            GeoBlockScreen(viewModel = geoViewModel)
+        // Màn hình Home
+        composable("home") {
+            HomeScreen(viewModel = homeViewModel)
         }
     }
 }
-
 @Composable
 fun BlockedAppsScreen() {
 }

@@ -26,6 +26,7 @@ import com.exemple.blockingapps.data.common.BlockState
 import com.exemple.blockingapps.data.local.FakeLocalDatabase
 import com.exemple.blockingapps.data.repo.UserRepository
 import com.exemple.blockingapps.di.LocalUserRepository
+import com.exemple.blockingapps.model.network.RetrofitClient // Import của bạn
 import com.exemple.blockingapps.navigation.AppNavHost
 import com.exemple.blockingapps.ui.home.HomeViewModel
 import com.exemple.blockingapps.ui.theme.BlockingAppsTheme
@@ -35,16 +36,15 @@ import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
-import kotlinx.coroutines.Dispatchers // <-- MỚI
-import kotlinx.coroutines.launch     // <-- MỚI
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import com.exemple.blockingapps.model.network.RetrofitClient
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
-    // 1. Khai báo trình xử lý xin quyền Vị trí
+    // 1. Khai báo trình xử lý xin quyền Vị trí (Giữ logic của bạn vì nó gọi tiếp background permission)
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -65,18 +65,23 @@ class MainActivity : ComponentActivity() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         enableEdgeToEdge()
 
+        // --- KHU VỰC XIN QUYỀN (Hợp nhất) ---
         askLocationPermissions()
         askBatteryOptimizationPermission()
         askOverlayPermission()
         askAccessibilityPermission()
 
+        // --- KHU VỰC DỮ LIỆU ---
         val userRepository = UserRepository(FakeLocalDatabase)
-        BlockState.blockedPackages = FakeLocalDatabase.loadBlockedPackages()
+        // Lưu ý: Nếu code của bạn kia update FakeLocalDatabase cần context 'this' thì sửa thành loadBlockedPackages(this)
+        // Hiện tại giữ nguyên của bạn để đảm bảo chạy được API
+        BlockState.blockedPackages = FakeLocalDatabase.loadBlockedPackages(this)
 
+        // --- GỌI API & LOCATION (Của bạn - QUAN TRỌNG) ---
         fetchRulesFromServer()
-
         startLocationUpdates()
 
+        // --- GIAO DIỆN (Giống nhau cả 2 bên) ---
         setContent {
             BlockingAppsTheme {
                 val navController = rememberNavController()
@@ -95,39 +100,46 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
-    private fun fetchRulesFromServer() {
-        // 1. Log này PHẢI hiện ngay khi nhấn Run để biết hàm đã được kích hoạt
-        Log.e("API_SYNC", "🚀 CHUẨN BỊ KÍCH HOẠT DÒNG CHẢY API...")
 
+    // --- LOGIC API (Của bạn - Đã fix lỗi Oneway) ---
+    private fun fetchRulesFromServer() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                Log.e("API_SYNC", "🌐 Đang gửi Request đến địa chỉ: ${RetrofitClient.toString()}")
-
-                // Gọi API
+                // 1. Fetch data from Ktor Server
                 val rules = RetrofitClient.api.getBlockRules()
 
-                // Xử lý dữ liệu ở Background
+                // 2. Filter blocked apps
                 val serverBlockedList = rules.filter { it.isBlocked }.map { it.packageName }.toSet()
 
-                // 2. Chuyển về Thread chính để cập nhật dữ liệu an toàn
                 withContext(Dispatchers.Main) {
+                    // 3. Update the legacy variable used by your friend's code
+                    BlockState.blockedPackages = serverBlockedList
+
+                    // --- 🔥 CRITICAL FIX HERE ---
+
+                    // Option A: If your friend has a reload function in the Service
+                    // AppBlockerAccessibilityService.reloadConfig()
+
+                    // Option B: Restart the logic manually (Example)
                     if (serverBlockedList.isNotEmpty()) {
-                        BlockState.blockedPackages = serverBlockedList
-                        Log.e("API_SYNC", "✅ ĐỒNG BỘ THÀNH CÔNG: Đã chặn ${serverBlockedList.size} Apps")
-                    } else {
-                        Log.e("API_SYNC", "⚠️ Server trả về danh sách trống!")
+                        Log.d("API_SYNC", "Rules updated. Triggering block check...")
+                        // Gọi hàm kiểm tra lại của bạn bác ở đây, ví dụ:
+                        // myBackgroundService.updateRules(serverBlockedList)
                     }
+
+                    // Log for debugging
+                    Log.i("API_SYNC", "Successfully synced ${serverBlockedList.size} rules from server.")
                 }
-            } catch (t: Throwable) {
-                // 3. Dùng Throwable thay vì Exception để bắt được cả lỗi thư viện (cực quan trọng)
-                Log.e("API_SYNC", "❌ LỖI HỆ THỐNG: ${t.localizedMessage}")
-                t.printStackTrace()
+            } catch (e: Exception) {
+                Log.e("API_SYNC", "Failed to fetch rules: ${e.message}")
             }
         }
     }
+
+
+    // --- LOGIC GEOFENCE (Của bạn - Tự tính khoảng cách) ---
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
-        // Giảm thời gian quét xuống 2 giây cho nhanh để test
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
             .build()
 
@@ -135,11 +147,8 @@ class MainActivity : ComponentActivity() {
             override fun onLocationResult(locationResult: LocationResult) {
                 val location = locationResult.lastLocation ?: return
 
-                // Kiểm tra xem bác đã nhấn nút KÍCH HOẠT trên Map chưa
                 if (BlockState.targetLat != 0.0) {
                     val results = FloatArray(1)
-
-                    // TỰ TÍNH KHOẢNG CÁCH
                     android.location.Location.distanceBetween(
                         location.latitude,
                         location.longitude,
@@ -147,12 +156,10 @@ class MainActivity : ComponentActivity() {
                         BlockState.targetLng,
                         results
                     )
-
                     val distance = results[0]
-                    // Cập nhật trạng thái vùng học tập
                     BlockState.isInStudyZone = distance <= 200f
 
-                    // Log kiểm tra: In cả số lượng App đang bị chặn
+                    // Log để kiểm tra
                     Log.e("GEO_CHECK", "KC: ${distance.toInt()}m | Trong vùng: ${BlockState.isInStudyZone} | Đang chặn: ${BlockState.blockedPackages.size} Apps")
                 } else {
                     Log.d("GEO_CHECK", "Chưa chọn vị trí trên Map (targetLat = 0)")
@@ -161,7 +168,7 @@ class MainActivity : ComponentActivity() {
         }, Looper.getMainLooper())
     }
 
-    // --- CÁC HÀM XIN QUYỀN (GIỮ NGUYÊN) ---
+    // --- CÁC HÀM HELPER (Giữ nguyên) ---
     private fun askLocationPermissions() {
         locationPermissionRequest.launch(arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,

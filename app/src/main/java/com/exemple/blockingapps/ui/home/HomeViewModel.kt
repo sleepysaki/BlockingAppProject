@@ -7,6 +7,7 @@ import androidx.annotation.RequiresApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.exemple.blockingapps.data.common.BlockState
+import com.exemple.blockingapps.data.local.FakeLocalDatabase
 import com.exemple.blockingapps.data.model.DailyUsageSummary
 import com.exemple.blockingapps.data.model.UsageCategory
 import com.exemple.blockingapps.data.model.UsageRecord
@@ -32,40 +33,32 @@ class HomeViewModel : ViewModel() {
     private val INSTANT_LOCK_DURATION_SECONDS = 3600L // 1 tiếng
 
     init {
-        // Đồng bộ dữ liệu ban đầu cho Service
         syncBlockState()
         startAllCountdowns()
     }
 
-    private fun createInitialState(): HomeUiState {
+    private fun createInitialState(context: Context? = null): HomeUiState {
         val devices = listOf(
             DeviceItem("DEV-001", "Kid - Pixel 5", "1h trước", false),
             DeviceItem("DEV-002", "Kid - Galaxy A12", "Vừa xong", true)
         )
 
-        val blockedApps = listOf(
+        val blockedFromDisk = context?.let {
+            FakeLocalDatabase.loadBlockedPackages(it)
+        } ?: emptySet()
+
+        val blockedApps = blockedFromDisk.map { pkg ->
             BlockedAppItem(
-                appId = "com.tiktok",
-                packageName = "com.tiktok", // Thêm package
-                appName = "TikTok",
-                category = "Social",
-                dailyLimitMinutes = 60,
-                remainingSeconds = 25 * 60L,
-                scheduleFrom = "19:00",
-                scheduleTo = "21:00"
-            ),
-            BlockedAppItem(
-                appId = "com.youtube",
-                packageName = "com.youtube", // Thêm package
-                appName = "YouTube",
-                category = "Video",
-                dailyLimitMinutes = 120,
+                appId = pkg,
+                packageName = pkg,
+                appName = pkg.substringAfterLast(".").replaceFirstChar { it.uppercase() },
+                category = "Restricted",
+                dailyLimitMinutes = 0,
                 remainingSeconds = 0L
             )
-        )
+        }
 
         val mockHourlyData = listOf(0, 0, 0, 0, 0, 0, 10, 15, 5, 0, 0, 0, 30, 45, 10, 0, 0, 0, 20, 15, 12, 0, 0, 0)
-
         val kid1HistorySummary = DailyUsageSummary(
             date = "Hôm nay, 16 tháng 12",
             totalScreenTimeMinutes = 162,
@@ -83,10 +76,12 @@ class HomeViewModel : ViewModel() {
 
         val historyData = mapOf("DEV-001" to listOf(kid1HistorySummary), "DEV-002" to emptyList())
 
-        val recommendations = listOf(
+        val allRecommendations = listOf(
             RecommendationItem("Kid watched TikTok 200 mins today — suggest 60 min limit", "com.tiktok", 60),
             RecommendationItem("Kid watched YouTube 140 mins — suggest 90 min limit", "com.youtube", 90)
         )
+
+        val filteredRecommendations = allRecommendations.filter { it.appId !in blockedFromDisk }
 
         val geo = listOf(
             GeoZoneItem(zoneId = "school", name = "School Zone", apps = listOf("com.tiktok", "com.minecraft")),
@@ -99,7 +94,7 @@ class HomeViewModel : ViewModel() {
             totalUsageMinutesToday = 320,
             devices = devices,
             blockedApps = blockedApps,
-            recommendations = recommendations,
+            recommendations = filteredRecommendations,
             geozones = geo,
             isLoading = false,
             error = null,
@@ -108,7 +103,6 @@ class HomeViewModel : ViewModel() {
         )
     }
 
-    // --- CÁC HÀM QUẢN LÝ THIẾT BỊ ---
     fun selectDeviceForHistory(deviceId: String) {
         _uiState.value = _uiState.value.copy(selectedDeviceId = deviceId)
     }
@@ -127,16 +121,17 @@ class HomeViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(devices = _uiState.value.devices.filterNot { it.deviceId == deviceId })
     }
 
-    // --- CÁC HÀM CHẶN APP ---
-    fun applyRecommendation(rec: RecommendationItem) {
+    fun applyRecommendation(context: Context, rec: RecommendationItem) {
         val pkgName = rec.appId ?: return
 
-        // --- BƯỚC CỨU MẠNG: KIỂM TRA PACKAGE ---
-        // Thay "com.exemple.blockingapps" bằng đúng Package Name của mày
         if (pkgName == "com.exemple.blockingapps") {
             Log.e("BLOCKER", "Dừng lại! Mày đang định tự sát bằng cách chặn chính mình.")
             return
         }
+
+        val currentSet = FakeLocalDatabase.loadBlockedPackages(context).toMutableSet()
+        currentSet.add(pkgName)
+        FakeLocalDatabase.saveBlockedPackages(context, currentSet)
 
         val newBlockedApp = BlockedAppItem(
             appId = pkgName,
@@ -148,19 +143,36 @@ class HomeViewModel : ViewModel() {
         )
 
         _uiState.value = _uiState.value.copy(
-            blockedApps = _uiState.value.blockedApps + newBlockedApp,
-            recommendations = _uiState.value.recommendations.filter { it != rec }
+            recommendations = _uiState.value.recommendations.filter { it.appId != pkgName },
+            blockedApps = _uiState.value.blockedApps + BlockedAppItem(pkgName, pkgName, "App", "Category", 0, 0)
         )
 
-        syncBlockState()
+        syncBlockState(context)
         BlockState.setInstantLockTime(INSTANT_LOCK_DURATION_SECONDS)
+
+        Log.d("DEBUG_REC", "Đã áp dụng chặn app: $pkgName và lưu vào ổ cứng")
     }
 
-    private fun syncBlockState() {
-        val currentPkgs = _uiState.value.blockedApps.map { it.appId }.toSet()
-        BlockState.blockedPackages = currentPkgs
-        BlockState.isBlocking = currentPkgs.isNotEmpty()
-        Log.d("DEBUG_BLOCK", "Đã đồng bộ ${currentPkgs.size} apps vào BlockState")
+    fun refreshDataFromDisk(context: Context) {
+        val blockedFromDisk = FakeLocalDatabase.loadBlockedPackages(context)
+
+        val currentRecs = _uiState.value.recommendations
+        val filteredRecs = currentRecs.filter { it.appId !in blockedFromDisk }
+
+        _uiState.value = _uiState.value.copy(
+            recommendations = filteredRecs
+        )
+    }
+
+    private fun syncBlockState(context: Context? = null) {
+        context?.let {
+            val diskApps = FakeLocalDatabase.loadBlockedPackages(it)
+            BlockState.blockedPackages = diskApps
+            BlockState.isBlocking = diskApps.isNotEmpty()
+        } ?: run {
+            val currentPkgs = _uiState.value.blockedApps.map { it.appId }.toSet()
+            BlockState.blockedPackages = currentPkgs
+        }
     }
 
     fun addBlockedApp(item: BlockedAppItem) {
@@ -194,7 +206,6 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    // --- CÁC HÀM COUNTDOWN ---
     private fun startAllCountdowns() {
         for (app in _uiState.value.blockedApps) {
             BlockState.remainingTimeSeconds[app.appId] = app.remainingSeconds
@@ -225,7 +236,6 @@ class HomeViewModel : ViewModel() {
         countdownJobs[appId] = job
     }
 
-    // --- LOAD DỮ LIỆU THẬT ---
     fun loadWeeklyData(context: Context) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isLoading = true)

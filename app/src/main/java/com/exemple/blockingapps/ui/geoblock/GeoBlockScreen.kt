@@ -18,21 +18,20 @@ import com.google.android.gms.maps.model.LatLng
 import com.exemple.blockingapps.data.common.BlockState
 import com.google.maps.android.compose.*
 import android.widget.Toast
+import com.exemple.blockingapps.data.local.FakeLocalDatabase
+import com.exemple.blockingapps.utils.LocationPrefs
 
 @Composable
 fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
     val context = LocalContext.current
     val apps by viewModel.appList.collectAsState()
 
-    // Lưu địa điểm bác chọn trên Map
     var selectedLocation by remember { mutableStateOf<LatLng?>(null) }
 
-    // Thiết lập Camera: Mặc định ban đầu, sau đó sẽ cập nhật theo vị trí máy ảo
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(21.0285, 105.8542), 15f)
     }
 
-    // Hiển thị nút "Vị trí của tôi" và Chấm xanh trên Map
     val uiSettings by remember { mutableStateOf(MapUiSettings(myLocationButtonEnabled = true)) }
     val properties by remember { mutableStateOf(MapProperties(isMyLocationEnabled = true)) }
 
@@ -41,7 +40,6 @@ fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // PHẦN 1: BẢN ĐỒ (Chiếm 40% màn hình)
         Box(modifier = Modifier.weight(0.4f)) {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
@@ -50,7 +48,6 @@ fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
                 uiSettings = uiSettings,
                 onMapClick = { selectedLocation = it }
             ) {
-                // Nếu bác chấm tay vào map, hiện cái Marker màu đỏ
                 selectedLocation?.let { loc ->
                     Marker(
                         state = MarkerState(position = loc),
@@ -60,7 +57,6 @@ fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
             }
         }
 
-        // PHẦN 2: DANH SÁCH APP VÀ NÚT KÍCH HOẠT (60% màn hình)
         Card(
             modifier = Modifier
                 .weight(0.6f)
@@ -108,15 +104,18 @@ fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
                 Button(
                     onClick = {
                         selectedLocation?.let { loc ->
-                            BlockState.restrictedApps = apps.filter { it.isSelected }.map { it.packageName }.toSet()
-                            BlockState.targetLat = loc.latitude
-                            BlockState.targetLng = loc.longitude
+                            val selectedAppSet = apps.filter { it.isSelected }.map { it.packageName }.toSet()
 
-                            Toast.makeText(context, "KÍCH HOẠT THÀNH CÔNG! Đang canh gác vùng này.", Toast.LENGTH_LONG).show()
+                            FakeLocalDatabase.saveBlockedPackages(context, selectedAppSet)
+
+                            BlockState.blockedPackages = selectedAppSet
+
+                            LocationPrefs.saveTargetLocation(context, loc.latitude, loc.longitude, 100f)
+
+                            Toast.makeText(context, "KÍCH HOẠT THÀNH CÔNG!", Toast.LENGTH_LONG).show()
                         }
                     },
                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    // Chỉ cho bấm khi đã chọn app VÀ đã chấm điểm trên map
                     enabled = selectedLocation != null && apps.any { it.isSelected }
                 ) {
                     Text("KÍCH HOẠT CHẶN")

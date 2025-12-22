@@ -1,4 +1,4 @@
-package com.exemple.blockingapps.ui.history // <-- KIỂM TRA LẠI PACKAGE NÀY
+package com.exemple.blockingapps.ui.history
 
 import android.os.Build
 import androidx.annotation.RequiresApi
@@ -13,10 +13,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-// Import đúng model của mày
 import com.exemple.blockingapps.ui.home.HomeViewModel
 import com.exemple.blockingapps.ui.home.RecommendationItem
 
@@ -27,8 +27,13 @@ fun RecommendationScreen(
     viewModel: HomeViewModel,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val recommendations = uiState.recommendations
+
+    LaunchedEffect(Unit) {
+        viewModel.refreshDataFromDisk(context)
+    }
 
     Scaffold(
         topBar = {
@@ -71,7 +76,9 @@ fun RecommendationScreen(
                     items(recommendations) { rec ->
                         RecommendationItemCard(
                             recommendation = rec,
-                            onApply = { viewModel.applyRecommendation(rec) }
+                            onApply = {
+                                viewModel.applyRecommendation(context, rec)
+                            }
                         )
                     }
                 }
