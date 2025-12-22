@@ -1,6 +1,6 @@
 package com.exemple.blockingapps
 
-import android.Manifest // <-- QUAN TRỌNG
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
@@ -14,11 +14,12 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.activity.result.contract.ActivityResultContracts // <-- QUAN TRỌNG
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.RequiresApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
 import com.exemple.blockingapps.data.common.BlockState
@@ -28,17 +29,21 @@ import com.exemple.blockingapps.di.LocalUserRepository
 import com.exemple.blockingapps.navigation.AppNavHost
 import com.exemple.blockingapps.ui.home.HomeViewModel
 import com.exemple.blockingapps.ui.theme.BlockingAppsTheme
-import com.exemple.blockingapps.utils.GeofenceHelper
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
 import com.google.android.gms.location.LocationRequest
 import com.google.android.gms.location.LocationResult
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import kotlinx.coroutines.Dispatchers // <-- MỚI
+import kotlinx.coroutines.launch     // <-- MỚI
+import kotlinx.coroutines.withContext
+import com.exemple.blockingapps.model.network.RetrofitClient
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+
     // 1. Khai báo trình xử lý xin quyền Vị trí
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -60,10 +65,7 @@ class MainActivity : ComponentActivity() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         enableEdgeToEdge()
 
-        // GỌI XIN QUYỀN VỊ TRÍ ĐẦU TIÊN
         askLocationPermissions()
-
-        // CÁC QUYỀN CŨ CỦA BÁC
         askBatteryOptimizationPermission()
         askOverlayPermission()
         askAccessibilityPermission()
@@ -71,7 +73,10 @@ class MainActivity : ComponentActivity() {
         val userRepository = UserRepository(FakeLocalDatabase)
         BlockState.blockedPackages = FakeLocalDatabase.loadBlockedPackages()
 
+        fetchRulesFromServer()
+
         startLocationUpdates()
+
         setContent {
             BlockingAppsTheme {
                 val navController = rememberNavController()
@@ -90,9 +95,39 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+    private fun fetchRulesFromServer() {
+        // 1. Log này PHẢI hiện ngay khi nhấn Run để biết hàm đã được kích hoạt
+        Log.e("API_SYNC", "🚀 CHUẨN BỊ KÍCH HOẠT DÒNG CHẢY API...")
+
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                Log.e("API_SYNC", "🌐 Đang gửi Request đến địa chỉ: ${RetrofitClient.toString()}")
+
+                // Gọi API
+                val rules = RetrofitClient.api.getBlockRules()
+
+                // Xử lý dữ liệu ở Background
+                val serverBlockedList = rules.filter { it.isBlocked }.map { it.packageName }.toSet()
+
+                // 2. Chuyển về Thread chính để cập nhật dữ liệu an toàn
+                withContext(Dispatchers.Main) {
+                    if (serverBlockedList.isNotEmpty()) {
+                        BlockState.blockedPackages = serverBlockedList
+                        Log.e("API_SYNC", "✅ ĐỒNG BỘ THÀNH CÔNG: Đã chặn ${serverBlockedList.size} Apps")
+                    } else {
+                        Log.e("API_SYNC", "⚠️ Server trả về danh sách trống!")
+                    }
+                }
+            } catch (t: Throwable) {
+                // 3. Dùng Throwable thay vì Exception để bắt được cả lỗi thư viện (cực quan trọng)
+                Log.e("API_SYNC", "❌ LỖI HỆ THỐNG: ${t.localizedMessage}")
+                t.printStackTrace()
+            }
+        }
+    }
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
-        // 1. Giảm thời gian quét xuống 2 giây cho nhanh để test (sau này chỉnh lại 10s sau)
+        // Giảm thời gian quét xuống 2 giây cho nhanh để test
         val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
             .build()
 
@@ -104,7 +139,7 @@ class MainActivity : ComponentActivity() {
                 if (BlockState.targetLat != 0.0) {
                     val results = FloatArray(1)
 
-                    // TỰ TÍNH KHOẢNG CÁCH (Không dùng GeofenceHelper nữa cho chắc)
+                    // TỰ TÍNH KHOẢNG CÁCH
                     android.location.Location.distanceBetween(
                         location.latitude,
                         location.longitude,
@@ -117,16 +152,16 @@ class MainActivity : ComponentActivity() {
                     // Cập nhật trạng thái vùng học tập
                     BlockState.isInStudyZone = distance <= 200f
 
-                    // --- DÒNG LOG QUAN TRỌNG NHẤT ĐỂ KIỂM TRA ---
-                    // Bác dùng Log.e để nó hiện màu ĐỎ trong Logcat cho dễ nhìn
-                    Log.e("GEO_CHECK", "KC: $distance m | Trong vùng: ${BlockState.isInStudyZone} | App cần chặn: ${BlockState.restrictedApps.size}")
+                    // Log kiểm tra: In cả số lượng App đang bị chặn
+                    Log.e("GEO_CHECK", "KC: ${distance.toInt()}m | Trong vùng: ${BlockState.isInStudyZone} | Đang chặn: ${BlockState.blockedPackages.size} Apps")
                 } else {
                     Log.d("GEO_CHECK", "Chưa chọn vị trí trên Map (targetLat = 0)")
                 }
             }
         }, Looper.getMainLooper())
     }
-    // --- HÀM XIN QUYỀN VỊ TRÍ (MỚI) ---
+
+    // --- CÁC HÀM XIN QUYỀN (GIỮ NGUYÊN) ---
     private fun askLocationPermissions() {
         locationPermissionRequest.launch(arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -136,12 +171,9 @@ class MainActivity : ComponentActivity() {
 
     private fun askBackgroundLocationPermission() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            // Kiểm tra xem đã có quyền chạy ngầm chưa
             val hasBackgroundLocation = checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
             if (!hasBackgroundLocation) {
-                // Hiển thị thông báo giải thích cho người dùng hoặc mở thẳng cài đặt
                 Log.d("GEO", "Cần quyền Background Location. Đang mở cài đặt...")
-                // Lưu ý: Android 11+ yêu cầu người dùng tự tay chọn "Allow all the time"
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = Uri.parse("package:$packageName")
                 }
@@ -150,7 +182,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- CÁC HÀM CŨ CỦA BÁC GIỮ NGUYÊN ---
     @SuppressLint("ServiceCast")
     private fun askBatteryOptimizationPermission() {
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
