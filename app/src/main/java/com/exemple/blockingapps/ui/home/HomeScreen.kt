@@ -1,6 +1,5 @@
 package com.exemple.blockingapps.ui.home
 
-
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
@@ -10,15 +9,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Lock // <-- Cần import icon này
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.seconds
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -32,10 +29,10 @@ fun HomeScreen(
     onNavigateToRecommend: () -> Unit = {},
     onNavigateToFace: () -> Unit = {},
     onNavigateToGeoBlock: () -> Unit = {},
+    onNavigateToGroups: () -> Unit = {}, // 1. Added new parameter
     onLogout: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
@@ -52,12 +49,7 @@ fun HomeScreen(
                     text = { Text("Lock Now") },
                     onClick = { viewModel.lockAllNow() },
                     icon = { Icon(Icons.Filled.Lock, contentDescription = "Lock") },
-                    modifier = Modifier,
                     expanded = true,
-                    shape = FloatingActionButtonDefaults.extendedFabShape,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    elevation = FloatingActionButtonDefaults.elevation(),
                 )
             }
         }
@@ -89,7 +81,9 @@ fun HomeScreen(
                 FeatureTile("Face Recognition", "Manage face profiles", onNavigateToFace),
                 FeatureTile("Usage History", "Charts and daily usage", onNavigateToHistory),
                 FeatureTile("Auto Recommendations", "Suggestions based on usage", onNavigateToRecommend),
-                FeatureTile("Location-based Blocking", "Block apps by zone", onNavigateToGeoBlock)
+                FeatureTile("Location-based Blocking", "Block apps by zone", onNavigateToGeoBlock),
+                // 2. Added new Group Feature Tile
+                FeatureTile("Groups / Workspace", "Create or join groups", onNavigateToGroups)
             )
 
             val features = if (uiState.role.equals("Parent", ignoreCase = true)) featuresParent else featuresParent.filter { it.title != "Lock Child Device" }

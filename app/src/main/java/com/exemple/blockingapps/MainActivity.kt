@@ -21,14 +21,19 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.exemple.blockingapps.data.common.BlockState
 import com.exemple.blockingapps.data.local.FakeLocalDatabase
 import com.exemple.blockingapps.data.repo.UserRepository
 import com.exemple.blockingapps.di.LocalUserRepository
-import com.exemple.blockingapps.model.network.RetrofitClient // Import của bạn
-import com.exemple.blockingapps.navigation.AppNavHost
+import com.exemple.blockingapps.model.network.RetrofitClient
+import com.exemple.blockingapps.ui.geoblock.GeoBlockScreen
+import com.exemple.blockingapps.ui.group.GroupScreen // Import GroupScreen
+import com.exemple.blockingapps.ui.home.HomeScreen
 import com.exemple.blockingapps.ui.home.HomeViewModel
+import com.exemple.blockingapps.ui.login.LoginScreen
 import com.exemple.blockingapps.ui.theme.BlockingAppsTheme
 import com.google.android.gms.location.FusedLocationProviderClient
 import com.google.android.gms.location.LocationCallback
@@ -44,7 +49,9 @@ class MainActivity : ComponentActivity() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
-    // 1. Khai báo trình xử lý xin quyền Vị trí (Giữ logic của bạn vì nó gọi tiếp background permission)
+    // MOCK USER ID FOR TESTING GROUP FEATURES (Replace with real ID from Login later)
+    private val TEST_USER_UUID = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
+
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -52,10 +59,10 @@ class MainActivity : ComponentActivity() {
         val coarseLocationGranted = permissions.getOrDefault(Manifest.permission.ACCESS_COARSE_LOCATION, false)
 
         if (fineLocationGranted || coarseLocationGranted) {
-            Log.d("GEO", "Đã có quyền vị trí, bắt đầu kiểm tra Background Location")
+            Log.d("GEO", "Location permission granted")
             askBackgroundLocationPermission()
         } else {
-            Log.e("GEO", "Người dùng từ chối quyền vị trí. Geofence sẽ không chạy!")
+            Log.e("GEO", "User denied location permission")
         }
     }
 
@@ -65,23 +72,17 @@ class MainActivity : ComponentActivity() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         enableEdgeToEdge()
 
-        // --- KHU VỰC XIN QUYỀN (Hợp nhất) ---
         askLocationPermissions()
         askBatteryOptimizationPermission()
         askOverlayPermission()
         askAccessibilityPermission()
 
-        // --- KHU VỰC DỮ LIỆU ---
         val userRepository = UserRepository(FakeLocalDatabase)
-        // Lưu ý: Nếu code của bạn kia update FakeLocalDatabase cần context 'this' thì sửa thành loadBlockedPackages(this)
-        // Hiện tại giữ nguyên của bạn để đảm bảo chạy được API
         BlockState.blockedPackages = FakeLocalDatabase.loadBlockedPackages(this)
 
-        // --- GỌI API & LOCATION (Của bạn - QUAN TRỌNG) ---
         fetchRulesFromServer()
         startLocationUpdates()
 
-        // --- GIAO DIỆN (Giống nhau cả 2 bên) ---
         setContent {
             BlockingAppsTheme {
                 val navController = rememberNavController()
@@ -91,44 +92,64 @@ class MainActivity : ComponentActivity() {
                     LocalUserRepository provides userRepository
                 ) {
                     Surface(color = MaterialTheme.colorScheme.background) {
-                        AppNavHost(
-                            navController = navController,
-                            homeViewModel = homeViewModel
-                        )
+
+                        NavHost(navController = navController, startDestination = "login") {
+
+                            composable("login") {
+                                LoginScreen(
+                                    onLoginSuccess = {
+                                        navController.navigate("home") {
+                                            popUpTo("login") { inclusive = true }
+                                        }
+                                    }
+                                )
+                            }
+
+                            composable("home") {
+                                HomeScreen(
+                                    viewModel = homeViewModel,
+                                    onLogout = {
+                                        navController.navigate("login") {
+                                            popUpTo("home") { inclusive = true }
+                                        }
+                                    },
+                                    onNavigateToGeoBlock = { navController.navigate("geo_block") },
+                                    // Add navigation to Groups
+                                    onNavigateToGroups = { navController.navigate("groups") }
+                                )
+                            }
+
+                            composable("geo_block") {
+                                GeoBlockScreen()
+                            }
+
+                            // NEW GROUP SCREEN
+                            composable("groups") {
+                                GroupScreen(currentUserId = TEST_USER_UUID)
+                            }
+                        }
                     }
                 }
             }
         }
     }
 
-    // --- LOGIC API (Của bạn - Đã fix lỗi Oneway) ---
     private fun fetchRulesFromServer() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // 1. Fetch data from Ktor Server
                 val rules = RetrofitClient.api.getBlockRules()
-
-                // 2. Filter blocked apps
                 val serverBlockedList = rules.filter { it.isBlocked }.map { it.packageName }.toSet()
+                val firstRule = rules.firstOrNull()
 
                 withContext(Dispatchers.Main) {
-                    // 3. Update the legacy variable used by your friend's code
                     BlockState.blockedPackages = serverBlockedList
 
-                    // --- 🔥 CRITICAL FIX HERE ---
-
-                    // Option A: If your friend has a reload function in the Service
-                    // AppBlockerAccessibilityService.reloadConfig()
-
-                    // Option B: Restart the logic manually (Example)
-                    if (serverBlockedList.isNotEmpty()) {
-                        Log.d("API_SYNC", "Rules updated. Triggering block check...")
-                        // Gọi hàm kiểm tra lại của bạn bác ở đây, ví dụ:
-                        // myBackgroundService.updateRules(serverBlockedList)
+                    if (firstRule != null) {
+                        BlockState.targetLatitude = firstRule.latitude ?: 0.0
+                        BlockState.targetLongitude = firstRule.longitude ?: 0.0
+                        BlockState.targetRadius = firstRule.radius ?: 100.0
                     }
-
-                    // Log for debugging
-                    Log.i("API_SYNC", "Successfully synced ${serverBlockedList.size} rules from server.")
+                    Log.i("API_SYNC", "Synced ${serverBlockedList.size} rules")
                 }
             } catch (e: Exception) {
                 Log.e("API_SYNC", "Failed to fetch rules: ${e.message}")
@@ -136,39 +157,29 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-
-    // --- LOGIC GEOFENCE (Của bạn - Tự tính khoảng cách) ---
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000)
-            .build()
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000).build()
 
         fusedLocationClient.requestLocationUpdates(locationRequest, object : LocationCallback() {
             override fun onLocationResult(locationResult: LocationResult) {
                 val location = locationResult.lastLocation ?: return
 
-                if (BlockState.targetLat != 0.0) {
+                if (BlockState.targetLatitude != 0.0) {
                     val results = FloatArray(1)
                     android.location.Location.distanceBetween(
                         location.latitude,
                         location.longitude,
-                        BlockState.targetLat,
-                        BlockState.targetLng,
+                        BlockState.targetLatitude,
+                        BlockState.targetLongitude,
                         results
                     )
-                    val distance = results[0]
-                    BlockState.isInStudyZone = distance <= 200f
-
-                    // Log để kiểm tra
-                    Log.e("GEO_CHECK", "KC: ${distance.toInt()}m | Trong vùng: ${BlockState.isInStudyZone} | Đang chặn: ${BlockState.blockedPackages.size} Apps")
-                } else {
-                    Log.d("GEO_CHECK", "Chưa chọn vị trí trên Map (targetLat = 0)")
+                    BlockState.isInStudyZone = results[0] <= BlockState.targetRadius
                 }
             }
         }, Looper.getMainLooper())
     }
 
-    // --- CÁC HÀM HELPER (Giữ nguyên) ---
     private fun askLocationPermissions() {
         locationPermissionRequest.launch(arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -180,7 +191,6 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val hasBackgroundLocation = checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
             if (!hasBackgroundLocation) {
-                Log.d("GEO", "Cần quyền Background Location. Đang mở cài đặt...")
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = Uri.parse("package:$packageName")
                 }
@@ -196,7 +206,7 @@ class MainActivity : ComponentActivity() {
             val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
                 data = Uri.parse("package:$packageName")
             }
-            try { startActivity(intent) } catch (e: Exception) { Log.e("BLOCKER", "Pin: ${e.message}") }
+            try { startActivity(intent) } catch (e: Exception) { Log.e("BLOCKER", "Battery Opt Error: ${e.message}") }
         }
     }
 

@@ -4,5 +4,8 @@ data class BlockRule(
     val isBlocked: Boolean,
     val limitMinutes: Int?,
     val startTime: String?,
-    val endTime: String?
+    val endTime: String?,
+    val latitude: Double? = 0.0,
+    val longitude: Double? = 0.0,
+    val radius: Double? = 100.0
 )
