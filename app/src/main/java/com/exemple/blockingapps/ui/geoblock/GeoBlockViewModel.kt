@@ -1,9 +1,11 @@
 package com.exemple.blockingapps.ui.geoblock
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.exemple.blockingapps.data.model.AppItem
@@ -20,21 +22,26 @@ class GeoBlockViewModel : ViewModel() {
     fun getInstalledApps(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = context.packageManager
-            val intent = Intent(Intent.ACTION_MAIN, null).apply {
-                addCategory(Intent.CATEGORY_LAUNCHER)
-            }
-            val resolveInfos = pm.queryIntentActivities(intent, 0)
 
-            val apps = resolveInfos.map { info ->
-                AppItem(
-                    name = info.loadLabel(pm).toString(),
-                    packageName = info.activityInfo.packageName,
-                    icon = info.loadIcon(pm),
-                    isSelected = false
-                )
+            val allApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
+
+            val apps = allApps.mapNotNull { info ->
+                val launchIntent = pm.getLaunchIntentForPackage(info.packageName)
+
+                if (launchIntent != null) {
+                    AppItem(
+                        name = info.loadLabel(pm).toString(),
+                        packageName = info.packageName,
+                        icon = info.loadIcon(pm),
+                        isSelected = false
+                    )
+                } else {
+                    null
+                }
             }.filter { it.packageName != context.packageName }
                 .sortedBy { it.name }
 
+            Log.d("LIST_APP", "Sau khi lọc còn: ${apps.size} apps thực tế")
             _appList.value = apps
         }
     }

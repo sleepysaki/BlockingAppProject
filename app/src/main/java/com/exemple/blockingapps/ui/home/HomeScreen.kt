@@ -10,11 +10,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Lock // <-- Cần import icon này
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -35,7 +36,7 @@ fun HomeScreen(
     onLogout: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     Scaffold(
         topBar = {
@@ -166,7 +167,7 @@ fun HomeScreen(
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
-                            IconButton(onClick = { viewModel.removeBlockedApp(app.appId) }) {
+                            IconButton(onClick = { viewModel.removeBlockedApp(app.appId, context) }) {
                                 Icon(imageVector = Icons.Default.Delete, contentDescription = "Remove")
                             }
                         }

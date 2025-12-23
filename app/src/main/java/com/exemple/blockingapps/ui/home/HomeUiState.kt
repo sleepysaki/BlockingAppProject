@@ -1,6 +1,7 @@
 package com.exemple.blockingapps.ui.home
 
 import android.icu.text.CaseMap
+import com.exemple.blockingapps.data.model.AppItem
 import com.exemple.blockingapps.data.model.DailyUsageSummary
 
 data class HomeUiState(
@@ -11,6 +12,8 @@ data class HomeUiState(
     val blockedApps: List<BlockedAppItem> = emptyList(),
     val recommendations: List<RecommendationItem> = emptyList(),
     val geozones: List<GeoZoneItem> = emptyList(),
+    val timePresets: List<TimePreset> = emptyList(),
+    val installedApps: List<AppItem> = emptyList(),
     val isLoading: Boolean = false,
     val error: String? = null,
     val usageHistory: Map<String, List<DailyUsageSummary>> = emptyMap(),
@@ -22,6 +25,13 @@ data class DeviceItem(
     val deviceName: String,
     val lastActive: String = "",
     val isConnected: Boolean = false
+)
+
+data class TimePreset(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val label: String,
+    val startTime: String,
+    val endTime: String
 )
 
 data class BlockedAppItem(

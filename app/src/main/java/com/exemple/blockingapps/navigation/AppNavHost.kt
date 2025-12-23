@@ -8,6 +8,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import com.exemple.blockingapps.ui.blockedapps.BlockedAppsScreen
 import com.exemple.blockingapps.ui.family.FamilyManagementScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockViewModel
@@ -68,7 +69,10 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         }
 
         composable(Routes.BLOCKED) {
-            BlockedAppsScreen()
+            BlockedAppsScreen(
+                viewModel = homeViewModel,
+                onBack = { navController.popBackStack() }
+            )
         }
 
         composable(Routes.FAMILY) {

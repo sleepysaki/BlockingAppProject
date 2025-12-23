@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.androidx.compiler)
     implementation(libs.play.services.location)
     implementation(libs.play.services.maps)
+    implementation(libs.androidx.room.common.jvm)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -2,6 +2,7 @@ package com.exemple.blockingapps.data.local
 
 import android.content.Context
 import com.exemple.blockingapps.data.model.User
+import com.exemple.blockingapps.ui.home.TimePreset
 
 object FakeLocalDatabase {
     private const val PREFS_NAME = "BlockedAppsPrefs"
@@ -19,5 +20,22 @@ object FakeLocalDatabase {
     fun loadBlockedPackages(context: Context): Set<String> {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getStringSet(KEY_PACKAGES, emptySet()) ?: emptySet()
+    }
+
+    fun saveTimePresets(context: Context, presets: List<TimePreset>) {
+        val prefs = context.getSharedPreferences("TimePresets", Context.MODE_PRIVATE)
+        val data = presets.joinToString(";") { "${it.id}|${it.label}|${it.startTime}|${it.endTime}" }
+        prefs.edit().putString("presets_data", data).apply()
+    }
+
+    fun loadTimePresets(context: Context): List<TimePreset> {
+        val prefs = context.getSharedPreferences("TimePresets", Context.MODE_PRIVATE)
+        val raw = prefs.getString("presets_data", "") ?: ""
+        if (raw.isEmpty()) return emptyList()
+
+        return raw.split(";").map {
+            val p = it.split("|")
+            TimePreset(p[0], p[1], p[2], p[3])
+        }
     }
 }
