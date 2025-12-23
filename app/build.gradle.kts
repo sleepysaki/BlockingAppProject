@@ -59,6 +59,13 @@ dependencies {
     implementation("com.google.mlkit:face-detection:16.1.7")
     implementation("org.tensorflow:tensorflow-lite:2.17.0")
     implementation("org.tensorflow:tensorflow-lite-support:0.5.0")
-    }
 
 
+    // Retrofit (Để gọi API)
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+
+    // Gson (Để chuyển đổi dữ liệu JSON)
+    implementation("com.google.code.gson:gson:2.10.1")
+
+}
