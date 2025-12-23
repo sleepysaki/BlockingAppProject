@@ -29,3 +29,9 @@ data class GroupMember(
     val fullName: String,
     val isAdmin: Boolean
 )
+data class UserGroup(
+    val groupId: String,
+    val groupName: String,
+    val joinCode: String,
+    val role: String
+)

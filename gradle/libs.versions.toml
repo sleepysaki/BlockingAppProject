@@ -16,6 +16,7 @@ identityJvm = "202411.1"
 compiler = "3.2.0-alpha11"
 playServicesLocation = "21.3.0"
 playServicesMaps = "19.2.0"
+roomCommonJvm = "2.8.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +41,7 @@ identity-jvm = { group = "com.android.identity", name = "identity-jvm", version.
 androidx-compiler = { group = "androidx.databinding", name = "compiler", version.ref = "compiler" }
 play-services-location = { group = "com.google.android.gms", name = "play-services-location", version.ref = "playServicesLocation" }
 play-services-maps = { group = "com.google.android.gms", name = "play-services-maps", version.ref = "playServicesMaps" }
+androidx-room-common-jvm = { group = "androidx.room", name = "room-common-jvm", version.ref = "roomCommonJvm" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

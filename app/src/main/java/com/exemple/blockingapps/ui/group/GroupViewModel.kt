@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.exemple.blockingapps.model.CreateGroupRequest
 import com.exemple.blockingapps.model.GroupMember
 import com.exemple.blockingapps.model.JoinGroupRequest
+import com.exemple.blockingapps.model.UserGroup
 import com.exemple.blockingapps.model.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +23,21 @@ class GroupViewModel : ViewModel() {
 
     private val _currentJoinCode = MutableStateFlow("")
     val currentJoinCode = _currentJoinCode.asStateFlow()
+
+    private val _myGroups = MutableStateFlow<List<UserGroup>>(emptyList())
+    val myGroups = _myGroups.asStateFlow()
+
+    fun fetchMyGroups(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val groups = RetrofitClient.api.getUserGroups(userId)
+                _myGroups.value = groups
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Handle error silently or log it
+            }
+        }
+    }
 
     // Create a new group
     fun createGroup(context: Context, groupName: String, userId: String) {

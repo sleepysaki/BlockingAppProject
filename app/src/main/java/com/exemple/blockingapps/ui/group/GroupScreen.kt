@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -92,7 +94,51 @@ fun GroupScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+// Subscribe to myGroups state
+        val myGroups by viewModel.myGroups.collectAsState()
 
+        // Trigger fetch on first load
+        LaunchedEffect(currentUserId) {
+            viewModel.fetchMyGroups(currentUserId)
+        }
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()), // Make screen scrollable
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            // ... (Keep Create Group & Join Group sections) ...
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // --- MY GROUPS SECTION ---
+            Text("My Groups", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            if (myGroups.isEmpty()) {
+                Text("You haven't joined any groups yet.", color = Color.Gray)
+            } else {
+                myGroups.forEach { group ->
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Text(text = group.groupName, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(text = "Code: ${group.joinCode}", style = MaterialTheme.typography.bodyMedium)
+                            Text(text = "Role: ${group.role}", style = MaterialTheme.typography.bodySmall, color = Color.DarkGray)
+                        }
+                    }
+                }
+            }
+
+            // ... (Keep Members List section if needed, or remove it as it handles single group logic) ...
+        }
         // --- MEMBER LIST ---
         if (members.isNotEmpty()) {
             Text("Members", style = MaterialTheme.typography.titleMedium)

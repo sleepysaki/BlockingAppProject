@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.exemple.blockingapps.data.common.BlockState
 import com.exemple.blockingapps.data.local.FakeLocalDatabase
+import com.exemple.blockingapps.data.model.AppItem
 import com.exemple.blockingapps.data.model.DailyUsageSummary
 import com.exemple.blockingapps.data.model.UsageCategory
 import com.exemple.blockingapps.data.model.UsageRecord
@@ -30,7 +31,7 @@ class HomeViewModel : ViewModel() {
     private val appEndTimes = mutableMapOf<String, Instant>()
 
     private var instantLockJob: Job? = null
-    private val INSTANT_LOCK_DURATION_SECONDS = 3600L // 1 tiếng
+    private val INSTANT_LOCK_DURATION_SECONDS = 3600L
 
     init {
         syncBlockState()
@@ -121,6 +122,64 @@ class HomeViewModel : ViewModel() {
         _uiState.value = _uiState.value.copy(devices = _uiState.value.devices.filterNot { it.deviceId == deviceId })
     }
 
+
+    fun loadPresetsFromDisk(context: Context) {
+        val savedPresets = FakeLocalDatabase.loadTimePresets(context)
+        _uiState.value = _uiState.value.copy(timePresets = savedPresets)
+    }
+
+    fun addTimePreset(context: Context, label: String, start: String, end: String) {
+        val newPreset = TimePreset(label = label, startTime = start, endTime = end)
+
+        val updatedList = _uiState.value.timePresets + newPreset
+        _uiState.value = _uiState.value.copy(timePresets = updatedList)
+
+        FakeLocalDatabase.saveTimePresets(context, updatedList)
+
+        Log.d("PRESET", "Đã thêm preset mới: $label")
+    }
+
+    fun updateInstalledApps(apps: List<AppItem>) {
+        _uiState.value = _uiState.value.copy(installedApps = apps)
+    }
+
+    fun assignAppToPreset(context: Context, app: AppItem, preset: TimePreset) {
+        val pkgName = app.packageName
+
+        val currentSet = FakeLocalDatabase.loadBlockedPackages(context).toMutableSet()
+        currentSet.add(pkgName)
+        FakeLocalDatabase.saveBlockedPackages(context, currentSet)
+
+        val prefs = context.getSharedPreferences("TimePresetPrefs", Context.MODE_PRIVATE)
+        prefs.edit().putString("assign_$pkgName", preset.id).apply()
+
+        syncBlockState(context)
+
+        _uiState.value = _uiState.value.copy(
+            blockedApps = _uiState.value.blockedApps + BlockedAppItem(
+                appId = pkgName,
+                packageName = pkgName,
+                appName = app.name,
+                category = "Lịch trình: ${preset.label}",
+                scheduleFrom = preset.startTime,
+                scheduleTo = preset.endTime
+            )
+        )
+
+        Log.d("PRESET", "Đã gán app ${app.name} vào khung giờ ${preset.label}")
+    }
+
+    fun deleteTimePreset(context: Context, presetId: String) {
+        val currentList = _uiState.value.timePresets.toMutableList()
+        currentList.removeAll { it.id == presetId }
+
+        _uiState.value = _uiState.value.copy(timePresets = currentList)
+
+        FakeLocalDatabase.saveTimePresets(context, currentList)
+
+        Log.d("PRESET", "Đã xóa preset: $presetId")
+    }
+
     fun applyRecommendation(context: Context, rec: RecommendationItem) {
         val pkgName = rec.appId ?: return
 
@@ -184,12 +243,23 @@ class HomeViewModel : ViewModel() {
         }
     }
 
-    fun removeBlockedApp(appId: String) {
-        _uiState.value = _uiState.value.copy(blockedApps = _uiState.value.blockedApps.filterNot { it.appId == appId })
-        syncBlockState()
-        countdownJobs[appId]?.cancel()
-        countdownJobs.remove(appId)
-        appEndTimes.remove(appId)
+    fun removeBlockedApp(packageName: String, context: Context) {
+        val currentSet = FakeLocalDatabase.loadBlockedPackages(context).toMutableSet()
+        if (currentSet.contains(packageName)) {
+            currentSet.remove(packageName)
+            FakeLocalDatabase.saveBlockedPackages(context, currentSet)
+        }
+
+        val prefs = context.getSharedPreferences("TimePresetPrefs", Context.MODE_PRIVATE)
+        prefs.edit().remove("assign_$packageName").apply()
+
+        syncBlockState(context)
+
+        _uiState.value = _uiState.value.copy(
+            blockedApps = _uiState.value.blockedApps.filter { it.packageName != packageName }
+        )
+
+        Log.d("REMOVE_APP", "Đã xóa triệt để app: $packageName")
     }
 
     fun lockAllNow() {

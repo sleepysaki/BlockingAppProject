@@ -1,25 +1,33 @@
 package com.exemple.blockingapps.ui.login
 
-import android.widget.Toast
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-// Import your ViewModel/Repository if needed
+import com.exemple.blockingapps.data.model.LoginRequest
+import com.exemple.blockingapps.data.model.RegisterRequest
 
 @Composable
 fun LoginScreen(
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: () -> Unit,
+    viewModel: AuthViewModel = viewModel()
 ) {
+    // State to toggle between Login and Register mode
+    var isRegisterMode by remember { mutableStateOf(false) }
+
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var fullName by remember { mutableStateOf("") } // Only for Register
+
+    val isLoading by viewModel.isLoading.collectAsState()
     val context = LocalContext.current
-    var isLoading by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -29,10 +37,24 @@ fun LoginScreen(
         verticalArrangement = Arrangement.Center
     ) {
         Text(
-            text = "Welcome Back",
+            text = if (isRegisterMode) "Create Account" else "Welcome Back",
             style = MaterialTheme.typography.headlineMedium,
-            modifier = Modifier.padding(bottom = 32.dp)
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary
         )
+
+        Spacer(modifier = Modifier.height(32.dp))
+
+        // Full Name field (Only show in Register mode)
+        if (isRegisterMode) {
+            OutlinedTextField(
+                value = fullName,
+                onValueChange = { fullName = it },
+                label = { Text("Full Name") },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
         OutlinedTextField(
             value = email,
@@ -53,18 +75,20 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // ACTION BUTTON (Login or Register)
         Button(
             onClick = {
-                // TODO: Call API Login here in the future
-                isLoading = true
-
-                // --- MOCK LOGIN LOGIC (Simulating Server) ---
-                if (email.isNotEmpty() && password.isNotEmpty()) {
-                    Toast.makeText(context, "Login Successful!", Toast.LENGTH_SHORT).show()
-                    onLoginSuccess() // Navigate to Home
+                if (isRegisterMode) {
+                    // Handle Register
+                    val req = RegisterRequest(email, password, fullName, role = "PARENT")
+                    viewModel.register(context, req) {
+                        // On success register, switch back to login to force user to sign in
+                        isRegisterMode = false
+                    }
                 } else {
-                    Toast.makeText(context, "Please enter email and password", Toast.LENGTH_SHORT).show()
-                    isLoading = false
+                    // Handle Login
+                    val req = LoginRequest(email, password)
+                    viewModel.login(context, req, onLoginSuccess)
                 }
             },
             modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -73,8 +97,17 @@ fun LoginScreen(
             if (isLoading) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(24.dp))
             } else {
-                Text("LOGIN")
+                Text(if (isRegisterMode) "REGISTER" else "LOGIN")
             }
         }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Toggle Text
+        Text(
+            text = if (isRegisterMode) "Already have an account? Login" else "Don't have an account? Register",
+            modifier = Modifier.clickable { isRegisterMode = !isRegisterMode },
+            color = MaterialTheme.colorScheme.secondary
+        )
     }
 }

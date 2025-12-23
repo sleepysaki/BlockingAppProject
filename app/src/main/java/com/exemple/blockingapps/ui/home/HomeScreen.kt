@@ -14,6 +14,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
@@ -29,10 +30,11 @@ fun HomeScreen(
     onNavigateToRecommend: () -> Unit = {},
     onNavigateToFace: () -> Unit = {},
     onNavigateToGeoBlock: () -> Unit = {},
-    onNavigateToGroups: () -> Unit = {}, // 1. Added new parameter
+    onNavigateToGroups: () -> Unit = {}, // 1. Added new parameter (From Input 1)
     onLogout: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current // From Input 3 (Needed for removeBlockedApp)
 
     Scaffold(
         topBar = {
@@ -60,6 +62,7 @@ fun HomeScreen(
                 .fillMaxSize()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
         ) {
+            // Header Card
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
@@ -73,6 +76,7 @@ fun HomeScreen(
                 Spacer(Modifier.height(12.dp))
             }
 
+            // Feature List
             val featuresParent = listOf(
                 FeatureTile("Family Members", "View and manage child devices", onNavigateToFamily),
                 FeatureTile("Blocked Apps", "Manage blocked apps and schedules", onNavigateToBlockedApps),
@@ -82,7 +86,7 @@ fun HomeScreen(
                 FeatureTile("Usage History", "Charts and daily usage", onNavigateToHistory),
                 FeatureTile("Auto Recommendations", "Suggestions based on usage", onNavigateToRecommend),
                 FeatureTile("Location-based Blocking", "Block apps by zone", onNavigateToGeoBlock),
-                // 2. Added new Group Feature Tile
+                // 2. Inserted Group Feature (From Input 1)
                 FeatureTile("Groups / Workspace", "Create or join groups", onNavigateToGroups)
             )
 
@@ -117,6 +121,7 @@ fun HomeScreen(
 
             item { Spacer(Modifier.height(12.dp)) }
 
+            // Linked Devices Section
             item {
                 Text("Linked devices", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
                 Spacer(Modifier.height(6.dp))
@@ -137,6 +142,7 @@ fun HomeScreen(
 
             item { Spacer(Modifier.height(10.dp)) }
 
+            // Blocked Apps Section
             item {
                 Text("Blocked / Limited apps", style = MaterialTheme.typography.titleMedium)
                 Spacer(Modifier.height(6.dp))
@@ -160,7 +166,8 @@ fun HomeScreen(
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
-                            IconButton(onClick = { viewModel.removeBlockedApp(app.appId) }) {
+                            // Using Input 3 logic (passing context) to avoid crash
+                            IconButton(onClick = { viewModel.removeBlockedApp(app.appId, context) }) {
                                 Icon(imageVector = Icons.Default.Delete, contentDescription = "Remove")
                             }
                         }
