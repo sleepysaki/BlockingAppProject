@@ -13,16 +13,18 @@ object DatabaseFactory {
         val config = HikariConfig()
         config.driverClassName = "org.postgresql.Driver"
 
-        // 1. URL kết nối (Host + Port + Database Name + SSL)
-        config.jdbcUrl = "jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require"
+        // --- SỬA ĐÚNG 1 DÒNG NÀY ---
+        // Giữ nguyên địa chỉ aws-1-ap-southeast-2 của bác
+        // Thêm đoạn đuôi: &prepareThreshold=0
+        config.jdbcUrl = "jdbc:postgresql://aws-1-ap-southeast-2.pooler.supabase.com:6543/postgres?sslmode=require&prepareThreshold=0"
 
-        // 2. Username (Lấy từ ảnh bạn gửi)
+        // Giữ nguyên User của bác
         config.username = "postgres.wtyalqkxbtqwirxyhwus"
 
-        // 3. Password (QUAN TRỌNG: Thay mật khẩu DB của bạn vào đây)
+        // Giữ nguyên Password của bác
         config.password = "groupproject_3667"
 
-        // Các cấu hình tối ưu giữ nguyên
+        // Các cấu hình khác giữ nguyên
         config.maximumPoolSize = 3
         config.isAutoCommit = false
         config.transactionIsolation = "TRANSACTION_REPEATABLE_READ"
