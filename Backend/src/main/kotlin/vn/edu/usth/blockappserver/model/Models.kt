@@ -64,6 +64,19 @@ object UsageLimits : Table("usage_limits") {
 
     override val primaryKey = PrimaryKey(limitId)
 }
+// GROUP RULES
+object GroupRules : Table("group_rules") {
+    val ruleId = uuid("rule_id").autoGenerate()
+    val groupId = uuid("group_id").references(Groups.groupId)
+    val packageName = varchar("package_name", 255)
+    val isBlocked = bool("is_blocked").default(true)
+
+    init {
+        uniqueIndex(groupId, packageName)
+    }
+
+    override val primaryKey = PrimaryKey(ruleId)
+}
 
 //  DATA TRANSFER OBJECTS (DTO)
 
@@ -140,4 +153,22 @@ data class CreateGroupResponse(
     val message: String,
     val groupId: String,
     val joinCode: String
+)
+@Serializable
+data class LeaveGroupRequest(
+    val groupId: String,
+    val userId: String
+)
+
+@Serializable
+data class RemoveMemberRequest(
+    val groupId: String,
+    val adminId: String,
+    val targetUserId: String
+)
+@Serializable
+data class GroupRuleDTO(
+    val groupId: String,
+    val packageName: String,
+    val isBlocked: Boolean
 )
