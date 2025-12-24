@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete // Import thêm icon xóa
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
@@ -13,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext // Import LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -25,11 +27,11 @@ fun GroupDetailScreen(
     groupName: String,
     currentUserId: String,
     onBack: () -> Unit,
-    // 👇 THÊM THAM SỐ NÀY (Để nhận lệnh từ AppNavHost)
     onSettingsClick: () -> Unit,
     viewModel: GroupViewModel = viewModel()
 ) {
     val members by viewModel.members.collectAsState()
+    val context = LocalContext.current // Lấy context để hiển thị Toast
 
     LaunchedEffect(groupId) {
         viewModel.fetchMembers(groupId)
@@ -58,9 +60,7 @@ fun GroupDetailScreen(
                     }
                 },
                 actions = {
-                    // Nếu là Admin thì hiện nút Setting
                     if (isAdmin) {
-                        // 👇 QUAN TRỌNG: Gọi hàm onSettingsClick khi bấm vào
                         IconButton(onClick = onSettingsClick) {
                             Icon(Icons.Default.Settings, contentDescription = "Settings")
                         }
@@ -83,17 +83,45 @@ fun GroupDetailScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            LazyColumn {
+            LazyColumn(
+                modifier = Modifier.weight(1f) // Chiếm phần không gian còn lại
+            ) {
                 items(members) { member ->
-                    MemberItem(member)
+                    MemberItem(
+                        member = member,
+                        isCurrentUserAdmin = isAdmin,
+                        onRemoveClick = {
+                            // Gọi hàm xóa thành viên từ ViewModel
+                            viewModel.removeMember(context, groupId, currentUserId, member.userId)
+                        }
+                    )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 👇 Nút Rời Nhóm (Leave Group)
+            Button(
+                onClick = {
+                    viewModel.leaveGroup(context, groupId, currentUserId) {
+                        onBack() // Quay lại màn hình trước sau khi rời nhóm
+                    }
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Leave Group", color = Color.White)
             }
         }
     }
 }
 
 @Composable
-fun MemberItem(member: GroupMember) {
+fun MemberItem(
+    member: GroupMember,
+    isCurrentUserAdmin: Boolean,
+    onRemoveClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -121,7 +149,9 @@ fun MemberItem(member: GroupMember) {
                 }
             }
 
-            if (member.role.equals("ADMIN", ignoreCase = true)) {
+            val isMemberAdmin = member.role.equals("ADMIN", ignoreCase = true)
+
+            if (isMemberAdmin) {
                 Surface(
                     color = MaterialTheme.colorScheme.primary,
                     shape = MaterialTheme.shapes.small
@@ -132,6 +162,17 @@ fun MemberItem(member: GroupMember) {
                         style = MaterialTheme.typography.labelSmall,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
+                }
+            } else {
+                // 👇 Nếu mình là Admin và người này KHÔNG phải Admin -> Hiện nút xóa
+                if (isCurrentUserAdmin) {
+                    IconButton(onClick = onRemoveClick) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Remove Member",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }

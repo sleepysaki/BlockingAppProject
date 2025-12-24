@@ -47,6 +47,18 @@ interface ApiService {
 
     @GET("users/{id}/groups")
     suspend fun getUserGroups(@Path("id") userId: String): List<UserGroup>
+
+    @POST("groups/leave")
+    suspend fun leaveGroup(@Body request: LeaveGroupRequest): Map<String, String>
+
+    @POST("groups/remove")
+    suspend fun removeMember(@Body request: RemoveMemberRequest): Map<String, String>
+
+    @GET("groups/{id}/rules")
+    suspend fun getGroupRules(@Path("id") groupId: String): List<GroupRuleDTO>
+
+    @POST("groups/rules")
+    suspend fun updateGroupRule(@Body rule: GroupRuleDTO): Map<String, String>
 }
 
 object RetrofitClient {

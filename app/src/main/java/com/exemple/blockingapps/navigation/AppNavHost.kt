@@ -6,6 +6,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.lifecycle.ViewModelStoreOwner
+import androidx.compose.runtime.remember
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -15,12 +17,14 @@ import com.exemple.blockingapps.ui.family.FamilyManagementScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockViewModel
 import com.exemple.blockingapps.ui.group.GroupDetailScreen
-import com.exemple.blockingapps.ui.group.GroupSettingsScreen // 👈 Nhớ import cái này
+import com.exemple.blockingapps.ui.group.GroupSettingsScreen
+import com.exemple.blockingapps.ui.group.GroupViewModel
 import com.exemple.blockingapps.ui.history.RecommendationScreen
 import com.exemple.blockingapps.ui.history.UsageHistoryScreen
 import com.exemple.blockingapps.ui.home.HomeScreen
 import com.exemple.blockingapps.ui.home.HomeViewModel
 import com.exemple.blockingapps.ui.login.LoginScreen
+
 
 object Routes {
     const val LOGIN = "login"
@@ -36,8 +40,8 @@ object Routes {
     // Group Routes
     const val GROUPS = "groups"
     const val GROUP_DETAIL = "group_detail/{groupId}/{groupName}"
-    // 👇 Route mới cho Settings
-    const val GROUP_SETTINGS = "group_settings/{groupName}/{joinCode}"
+
+    const val GROUP_SETTINGS = "group_settings/{groupId}/{groupName}/{joinCode}"
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -122,13 +126,14 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
 
         composable(Routes.GROUPS) {
             val realUserId = com.exemple.blockingapps.data.local.SessionManager.getUserId(context)
+            val groupViewModel: GroupViewModel = viewModel()
 
             if (realUserId != null && realUserId.isNotEmpty()) {
                 com.exemple.blockingapps.ui.group.GroupScreen(
                     currentUserId = realUserId,
                     onGroupClick = { groupId, groupName ->
                         navController.navigate("group_detail/$groupId/$groupName")
-                    }
+                    },
                 )
             } else {
                 LaunchedEffect(Unit) {
@@ -149,40 +154,50 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
             val groupId = backStackEntry.arguments?.getString("groupId") ?: ""
             val groupName = backStackEntry.arguments?.getString("groupName") ?: "Unknown Group"
 
-            val currentUserId = com.exemple.blockingapps.data.local.SessionManager.getUserId(context) ?: ""
+            val currentUserId =
+                com.exemple.blockingapps.data.local.SessionManager.getUserId(context) ?: ""
 
-            val groupViewModel: com.exemple.blockingapps.ui.group.GroupViewModel = viewModel(
-                viewModelStoreOwner = navController.getBackStackEntry(Routes.GROUPS)
-            )
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(Routes.GROUPS)
+            }
+            val groupViewModel: GroupViewModel = viewModel(parentEntry)
 
             GroupDetailScreen(
                 groupId = groupId,
                 groupName = groupName,
                 currentUserId = currentUserId,
                 onBack = { navController.popBackStack() },
-                // 👇 Xử lý sự kiện bấm nút Settings
                 onSettingsClick = {
                     val realJoinCode = groupViewModel.getJoinCodeForGroup(groupId)
-                    navController.navigate("group_settings/$groupName/$realJoinCode")
-                }
+                    navController.navigate("group_settings/$groupId/$groupName/$realJoinCode")
+                },
+                viewModel = groupViewModel
             )
         }
 
-        // 👇 Màn hình Settings mới
         composable(
             route = Routes.GROUP_SETTINGS,
             arguments = listOf(
+                navArgument("groupId") { type = NavType.StringType },
                 navArgument("groupName") { type = NavType.StringType },
                 navArgument("joinCode") { type = NavType.StringType }
             )
         ) { backStackEntry ->
+            val gId = backStackEntry.arguments?.getString("groupId") ?: ""
             val gName = backStackEntry.arguments?.getString("groupName") ?: ""
             val jCode = backStackEntry.arguments?.getString("joinCode") ?: ""
 
+            val parentEntry = remember(backStackEntry) {
+                navController.getBackStackEntry(Routes.GROUPS)
+            }
+            val groupViewModel: GroupViewModel = viewModel(parentEntry)
+
             GroupSettingsScreen(
+                groupId = gId,
                 groupName = gName,
                 joinCode = jCode,
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                viewModel = groupViewModel
             )
         }
     }

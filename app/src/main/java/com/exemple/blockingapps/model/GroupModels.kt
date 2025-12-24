@@ -34,3 +34,18 @@ data class UserGroup(
     val joinCode: String,
     val role: String
 )
+data class LeaveGroupRequest(
+    val groupId: String,
+    val userId: String
+)
+
+data class RemoveMemberRequest(
+    val groupId: String,
+    val adminId: String,
+    val targetUserId: String
+)
+data class GroupRuleDTO(
+    val groupId: String,
+    val packageName: String,
+    val isBlocked: Boolean
+)
