@@ -10,6 +10,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.select
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.transactions.transaction
 import vn.edu.usth.blockappserver.model.*
@@ -60,6 +61,7 @@ fun Application.module() {
                 e.printStackTrace()
             }
         }
+
         // Get Groups for a User
         get("/users/{id}/groups") {
             try {
@@ -69,20 +71,19 @@ fun Application.module() {
                     return@get
                 }
 
-                val userUuid = java.util.UUID.fromString(userIdStr)
+                val userUuid = UUID.fromString(userIdStr)
 
                 val groups = transaction {
-                    // Fix: Use isGroupAdmin instead of role
+                    // Join Groups and GroupMembers tables
                     (Groups innerJoin GroupMembers)
-                        .select(Groups.groupId, Groups.name, Groups.joinCode, GroupMembers.isGroupAdmin)
+                        .select(Groups.groupId, Groups.name, Groups.joinCode, GroupMembers.role) // Lấy role từ DB
                         .where { GroupMembers.userId eq userUuid }
                         .map {
-                            val isAdmin = it[GroupMembers.isGroupAdmin]
                             mapOf(
                                 "groupId" to it[Groups.groupId].toString(),
                                 "groupName" to it[Groups.name],
                                 "joinCode" to it[Groups.joinCode],
-                                "role" to if (isAdmin) "ADMIN" else "MEMBER" // Convert boolean to string
+                                "role" to it[GroupMembers.role] // Trả về role (ADMIN/MEMBER)
                             )
                         }
                 }
@@ -93,6 +94,7 @@ fun Application.module() {
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
             }
         }
+
         // POST: Save rules
         post("/rules") {
             try {
@@ -167,13 +169,14 @@ fun Application.module() {
                 }
 
                 if (user != null) {
-                    call.respond(LoginResponse(token = "fake-jwt-token-123", user = user))
+                    val dynamicToken = UUID.randomUUID().toString()
+                    call.respond(LoginResponse(token = dynamicToken, user = user))
                 } else {
-                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Incorrect email or password!"))
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("message" to "Incorrect email or password!"))
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Invalid JSON format"))
+                call.respond(HttpStatusCode.BadRequest, mapOf("message" to "Invalid request format: ${e.message}"))
             }
         }
 
@@ -199,17 +202,21 @@ fun Application.module() {
                     GroupMembers.insert {
                         it[groupId] = gId
                         it[userId] = adminUuid
+                        // 👇 QUAN TRỌNG: Phải set Role là ADMIN
+                        it[role] = "ADMIN"
                         it[isGroupAdmin] = true
                     }
                     gId
                 }
 
-                call.respond(CreateGroupResponse(
-                    status = "success",
-                    message = "Group created successfully",
-                    groupId = newGroupId.toString(),
-                    joinCode = newJoinCode
-                ))
+                call.respond(
+                    CreateGroupResponse(
+                        status = "success",
+                        message = "Group created successfully",
+                        groupId = newGroupId.toString(),
+                        joinCode = newJoinCode
+                    )
+                )
 
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -239,6 +246,8 @@ fun Application.module() {
                     GroupMembers.insert {
                         it[groupId] = gId
                         it[userId] = userUuid
+                        // 👇 QUAN TRỌNG: Phải set Role là MEMBER
+                        it[role] = "MEMBER"
                         it[isGroupAdmin] = false
                     }
                     "Success"
@@ -258,28 +267,33 @@ fun Application.module() {
 
         // 3. Get Members
         get("/groups/{id}/members") {
+            val groupId = call.parameters["id"]
+
             try {
-                val idStr = call.parameters["id"]
-                if (idStr == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing ID"))
+                if (groupId == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing Group ID"))
                     return@get
                 }
-                val groupUuid = UUID.fromString(idStr)
 
                 val members = transaction {
                     (GroupMembers innerJoin Users)
-                        .select(GroupMembers.userId, Users.fullName, GroupMembers.isGroupAdmin)
-                        .where { GroupMembers.groupId eq groupUuid }
-                        .map {
-                            GroupMemberDTO(
-                                userId = it[GroupMembers.userId].toString(),
-                                fullName = it[Users.fullName],
-                                isAdmin = it[GroupMembers.isGroupAdmin]
+                        .select(
+                            Users.userId,
+                            Users.fullName,
+                            Users.email,
+                            GroupMembers.role // Lấy cột role
+                        )
+                        .where { GroupMembers.groupId eq UUID.fromString(groupId) }
+                        .map { row ->
+                            GroupMemberResponse(
+                                userId = row[Users.userId].toString(),
+                                fullName = row[Users.fullName],
+                                email = row[Users.email],
+                                role = row[GroupMembers.role] // Map cột role vào JSON
                             )
                         }
                 }
                 call.respond(members)
-
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))

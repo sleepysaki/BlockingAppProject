@@ -36,8 +36,8 @@ object Groups : Table("groups") {
 object GroupMembers : Table("group_members") {
     val groupId = uuid("group_id").references(Groups.groupId)
     val userId = uuid("user_id").references(Users.userId)
+    val role = varchar("role", 50).default("MEMBER")
     val isGroupAdmin = bool("is_group_admin").default(false)
-
     override val primaryKey = PrimaryKey(groupId, userId)
 }
 
@@ -127,7 +127,13 @@ data class GroupMemberDTO(
     val fullName: String,
     val isAdmin: Boolean
 )
-
+@Serializable // Nếu dùng Kotlinx.Serialization
+data class GroupMemberResponse(
+    val userId: String,
+    val fullName: String,
+    val email: String,
+    val role: String // 👈 THÊM DÒNG NÀY VÀO
+)
 @Serializable
 data class CreateGroupResponse(
     val status: String,
