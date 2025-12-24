@@ -27,19 +27,23 @@ class GroupViewModel : ViewModel() {
     private val _myGroups = MutableStateFlow<List<UserGroup>>(emptyList())
     val myGroups = _myGroups.asStateFlow()
 
+    // 👇 HÀM MỚI: Lấy Join Code từ danh sách nhóm hiện có
+    fun getJoinCodeForGroup(groupId: String): String {
+        return _myGroups.value.find { it.groupId == groupId }?.joinCode ?: "N/A"
+    }
+
     fun fetchMyGroups(userId: String) {
+        _myGroups.value = emptyList()
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val groups = RetrofitClient.api.getUserGroups(userId)
                 _myGroups.value = groups
             } catch (e: Exception) {
                 e.printStackTrace()
-                // Handle error silently or log it
             }
         }
     }
 
-    // Create a new group
     fun createGroup(context: Context, groupName: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -50,8 +54,7 @@ class GroupViewModel : ViewModel() {
                     if (response.status == "success") {
                         _currentJoinCode.value = response.joinCode
                         Toast.makeText(context, "Group Created! Code: ${response.joinCode}", Toast.LENGTH_LONG).show()
-                        // Automatically fetch members after creation
-                        fetchMembers(response.groupId)
+                        fetchMyGroups(userId)
                     } else {
                         Toast.makeText(context, "Failed: ${response.message}", Toast.LENGTH_SHORT).show()
                     }
@@ -65,7 +68,6 @@ class GroupViewModel : ViewModel() {
         }
     }
 
-    // Join existing group
     fun joinGroup(context: Context, joinCode: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -76,8 +78,7 @@ class GroupViewModel : ViewModel() {
                     val msg = response["message"] ?: "Unknown response"
                     if (response["status"] == "success") {
                         Toast.makeText(context, "Joined Successfully!", Toast.LENGTH_SHORT).show()
-                        // Note: To fetch members, we need groupId.
-                        // For simplicity, we just show success toast here.
+                        fetchMyGroups(userId)
                     } else {
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     }
@@ -91,7 +92,6 @@ class GroupViewModel : ViewModel() {
         }
     }
 
-    // Get list of members
     fun fetchMembers(groupId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {

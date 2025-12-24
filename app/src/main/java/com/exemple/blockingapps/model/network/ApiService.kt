@@ -4,13 +4,17 @@ import BlockRuleDTO
 import com.exemple.blockingapps.data.model.LoginRequest
 import com.exemple.blockingapps.data.model.LoginResponse
 import com.exemple.blockingapps.data.model.RegisterRequest
+import com.exemple.blockingapps.data.model.RegisterResponse
 import com.exemple.blockingapps.model.*
+import okhttp3.OkHttpClient
+import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
+import java.util.concurrent.TimeUnit
 
 interface ApiService {
 
@@ -20,7 +24,7 @@ interface ApiService {
     suspend fun login(@Body request: LoginRequest): LoginResponse
 
     @POST("auth/register")
-    suspend fun register(@Body request: RegisterRequest): Map<String, String> // Fixed return type
+    suspend fun register(@Body request: RegisterRequest): RegisterResponse
 
     // --- BLOCKING RULES ---
 
@@ -48,9 +52,21 @@ interface ApiService {
 object RetrofitClient {
     private const val BASE_URL = "http://10.0.2.2:8080/"
 
+    // 👇 CẤU HÌNH LOGGING INTERCEPTOR
+    private val loggingInterceptor = HttpLoggingInterceptor().apply {
+        level = HttpLoggingInterceptor.Level.BODY
+    }
+
+    private val client = OkHttpClient.Builder()
+        .addInterceptor(loggingInterceptor) // 👈 Thêm dòng này
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(30, TimeUnit.SECONDS)
+        .build()
+
     val api: ApiService by lazy {
         Retrofit.Builder()
             .baseUrl(BASE_URL)
+            .client(client) // 👈 Nhớ set client vào đây
             .addConverterFactory(GsonConverterFactory.create())
             .build()
             .create(ApiService::class.java)

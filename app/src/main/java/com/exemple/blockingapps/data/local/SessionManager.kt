@@ -29,9 +29,13 @@ object SessionManager {
         return getPrefs(context).getBoolean(KEY_IS_LOGGED_IN, false)
     }
 
-    fun logout(context: Context) {
+    fun clearSession(context: Context) {
         val editor = getPrefs(context).edit()
         editor.clear()
         editor.apply()
     }
+    fun getUserName(context: Context): String? {
+        return getPrefs(context).getString("user_name", "User")
+    }
+
 }

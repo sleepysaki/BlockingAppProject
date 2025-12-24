@@ -11,6 +11,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.exemple.blockingapps.data.local.SessionManager // Đảm bảo import đúng
 import com.exemple.blockingapps.data.model.LoginRequest
 import com.exemple.blockingapps.data.model.RegisterRequest
 
@@ -19,7 +20,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit,
     viewModel: AuthViewModel = viewModel()
 ) {
-    // State to toggle between Login and Register mode
+    // State toggle between Login and Register mode
     var isRegisterMode by remember { mutableStateOf(false) }
 
     var email by remember { mutableStateOf("") }
@@ -28,6 +29,12 @@ fun LoginScreen(
 
     val isLoading by viewModel.isLoading.collectAsState()
     val context = LocalContext.current
+
+    // 👇 QUAN TRỌNG: Xóa sạch dữ liệu cũ ngay khi vừa vào màn hình Login
+    // Giúp đảm bảo không bị dính ID của người dùng trước đó
+    LaunchedEffect(Unit) {
+        SessionManager.clearSession(context)
+    }
 
     Column(
         modifier = Modifier
@@ -84,14 +91,19 @@ fun LoginScreen(
                     viewModel.register(context, req) {
                         // On success register, switch back to login to force user to sign in
                         isRegisterMode = false
+                        // Xóa form để người dùng nhập lại
+                        password = ""
                     }
                 } else {
                     // Handle Login
                     val req = LoginRequest(email, password)
+                    // Gọi hàm login trong ViewModel (Nơi sẽ thực hiện lưu Session)
                     viewModel.login(context, req, onLoginSuccess)
                 }
             },
-            modifier = Modifier.fillMaxWidth().height(50.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(50.dp),
             enabled = !isLoading
         ) {
             if (isLoading) {

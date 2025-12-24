@@ -34,8 +34,11 @@ fun HomeScreen(
     onLogout: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current // From Input 3 (Needed for removeBlockedApp)
+    val context = LocalContext.current
 
+    val realName = remember {
+        com.exemple.blockingapps.data.local.SessionManager.getUserName(context) ?: "User"
+    }
     Scaffold(
         topBar = {
             TopAppBar(
@@ -66,7 +69,7 @@ fun HomeScreen(
             item {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Hello, ${uiState.username}", style = MaterialTheme.typography.headlineSmall)
+                        Text("Hello, $realName", style = MaterialTheme.typography.headlineSmall)
                         Spacer(Modifier.height(6.dp))
                         Text("Today: ${uiState.totalUsageMinutesToday} minutes used", style = MaterialTheme.typography.bodyMedium)
                         Spacer(Modifier.height(6.dp))

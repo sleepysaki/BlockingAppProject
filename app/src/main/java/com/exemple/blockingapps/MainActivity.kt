@@ -21,26 +21,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.exemple.blockingapps.data.common.BlockState
 import com.exemple.blockingapps.data.local.FakeLocalDatabase
 import com.exemple.blockingapps.data.repo.UserRepository
 import com.exemple.blockingapps.di.LocalUserRepository
 import com.exemple.blockingapps.model.network.RetrofitClient
-import com.exemple.blockingapps.ui.geoblock.GeoBlockScreen
-import com.exemple.blockingapps.ui.group.GroupScreen // Import GroupScreen
-import com.exemple.blockingapps.ui.home.HomeScreen
+import com.exemple.blockingapps.navigation.AppNavHost
 import com.exemple.blockingapps.ui.home.HomeViewModel
-import com.exemple.blockingapps.ui.login.LoginScreen
 import com.exemple.blockingapps.ui.theme.BlockingAppsTheme
-import com.google.android.gms.location.FusedLocationProviderClient
-import com.google.android.gms.location.LocationCallback
-import com.google.android.gms.location.LocationRequest
-import com.google.android.gms.location.LocationResult
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
+import com.google.android.gms.location.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -48,10 +38,6 @@ import kotlinx.coroutines.withContext
 class MainActivity : ComponentActivity() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
-
-    // MOCK USER ID FOR TESTING GROUP FEATURES (Replace with real ID from Login later)
-    private val TEST_USER_UUID = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
-
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -92,42 +78,10 @@ class MainActivity : ComponentActivity() {
                     LocalUserRepository provides userRepository
                 ) {
                     Surface(color = MaterialTheme.colorScheme.background) {
-
-                        NavHost(navController = navController, startDestination = "login") {
-
-                            composable("login") {
-                                LoginScreen(
-                                    onLoginSuccess = {
-                                        navController.navigate("home") {
-                                            popUpTo("login") { inclusive = true }
-                                        }
-                                    }
-                                )
-                            }
-
-                            composable("home") {
-                                HomeScreen(
-                                    viewModel = homeViewModel,
-                                    onLogout = {
-                                        navController.navigate("login") {
-                                            popUpTo("home") { inclusive = true }
-                                        }
-                                    },
-                                    onNavigateToGeoBlock = { navController.navigate("geo_block") },
-                                    // Add navigation to Groups
-                                    onNavigateToGroups = { navController.navigate("groups") }
-                                )
-                            }
-
-                            composable("geo_block") {
-                                GeoBlockScreen()
-                            }
-
-                            // NEW GROUP SCREEN
-                            composable("groups") {
-                                GroupScreen(currentUserId = TEST_USER_UUID)
-                            }
-                        }
+                        AppNavHost(
+                            navController = navController,
+                            homeViewModel = homeViewModel
+                        )
                     }
                 }
             }

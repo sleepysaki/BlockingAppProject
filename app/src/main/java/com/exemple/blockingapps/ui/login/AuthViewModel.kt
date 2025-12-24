@@ -19,60 +19,56 @@ class AuthViewModel : ViewModel() {
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
 
-    // Function to Register a new user
-    fun register(context: Context, request: RegisterRequest, onSuccess: () -> Unit) {
+    fun login(context: Context, request: LoginRequest, onSuccess: () -> Unit) {
         _isLoading.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Call Server API
-                val response = RetrofitClient.api.register(request)
+                val response = RetrofitClient.api.login(request)
 
                 withContext(Dispatchers.Main) {
-                    _isLoading.value = false
-                    val msg = response["message"] ?: "Registration successful"
-                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
-                    onSuccess() // Switch to Login mode or auto-login
+                    SessionManager.saveUserSession(
+                        context,
+                        userId = response.user.id,
+                        fullName = response.user.fullName
+                    )
+
+                    Toast.makeText(context, "Login Successful!", Toast.LENGTH_SHORT).show()
+                    onSuccess()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    _isLoading.value = false
-                    Toast.makeText(context, "Register Failed: ${e.message}", Toast.LENGTH_LONG).show()
+                    val errorMsg = e.message ?: "Login failed"
+                    Toast.makeText(context, "Error: $errorMsg", Toast.LENGTH_SHORT).show()
                 }
+            } finally {
+                _isLoading.value = false
             }
         }
     }
 
-    // Function to Login
-    fun login(context: Context, request: LoginRequest, onLoginSuccess: () -> Unit) {
+    fun register(context: Context, request: RegisterRequest, onSuccess: () -> Unit) {
         _isLoading.value = true
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // Call Server API
-                val response = RetrofitClient.api.login(request)
-
+                val response = RetrofitClient.api.register(request)
                 withContext(Dispatchers.Main) {
-                    _isLoading.value = false
-                    if (response.user.id.isNotEmpty()) {
-                        // 1. Save Session locally
-                        SessionManager.saveUserSession(
-                            context,
-                            response.user.id,
-                            response.user.fullName
-                        )
-
-                        Toast.makeText(context, "Welcome ${response.user.fullName}!", Toast.LENGTH_SHORT).show()
-
-                        // 2. Navigate to Home
-                        onLoginSuccess()
+                    if (response.status == "success") {
+                        Toast.makeText(context, "Registered! Please Login.", Toast.LENGTH_SHORT).show()
+                        onSuccess()
+                    } else {
+                        val msg = response.message ?: "Registration failed"
+                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
-                    _isLoading.value = false
-                    Toast.makeText(context, "Login Error: Check email/password", Toast.LENGTH_SHORT).show()
+                    val errorMsg = e.message ?: "Unknown network error"
+                    Toast.makeText(context, "Error: $errorMsg", Toast.LENGTH_SHORT).show()
                 }
+            } finally {
+                _isLoading.value = false
             }
         }
     }

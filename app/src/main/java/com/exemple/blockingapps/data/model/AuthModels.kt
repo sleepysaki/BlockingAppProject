@@ -1,28 +1,36 @@
-// AuthModels.kt
 package com.exemple.blockingapps.data.model
 
-data class UserDTO(
-    val id: String,
-    val email: String,
-    val fullName: String,
-    val role: String
-)
+import com.google.gson.annotations.SerializedName
 
-data class LoginResponse(
-    val token: String,
-    val user: UserDTO
-)
+// --- REQUESTS (Gửi đi) ---
 
-// Used to send to the server when logging in
 data class LoginRequest(
     val email: String,
     val password: String
 )
 
-// Used to send to the server during registration
 data class RegisterRequest(
     val email: String,
     val password: String,
     val fullName: String,
-    val role: String = "PARENT" // Default is Parent
+    val role: String
+)
+
+// --- RESPONSES (Nhận về) ---
+
+data class LoginResponse(
+    @SerializedName("token") val token: String,
+    @SerializedName("user") val user: UserInfo
+)
+
+data class UserInfo(
+    @SerializedName("id") val id: String,
+    @SerializedName("email") val email: String,
+    @SerializedName("fullName") val fullName: String,
+    @SerializedName("role") val role: String
+)
+
+data class RegisterResponse(
+    @SerializedName("status") val status: String?,
+    @SerializedName("message") val message: String?
 )

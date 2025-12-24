@@ -1,7 +1,5 @@
 package com.exemple.blockingapps.model
 
-import com.google.gson.annotations.SerializedName
-
 data class CreateGroupRequest(
     val name: String,
     val adminId: String
@@ -27,7 +25,8 @@ data class JoinGroupResponse(
 data class GroupMember(
     val userId: String,
     val fullName: String,
-    val isAdmin: Boolean
+    val email: String? = "",
+    val role: String
 )
 data class UserGroup(
     val groupId: String,

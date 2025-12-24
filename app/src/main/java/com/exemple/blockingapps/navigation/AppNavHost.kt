@@ -6,13 +6,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
+import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
-import com.exemple.blockingapps.ui.blockedapps.BlockedAppsScreen // Ensure this import exists
+import androidx.navigation.navArgument
+import com.exemple.blockingapps.ui.blockedapps.BlockedAppsScreen
 import com.exemple.blockingapps.ui.family.FamilyManagementScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockViewModel
-import com.exemple.blockingapps.ui.group.GroupScreen // 👈 Import your GroupScreen
+import com.exemple.blockingapps.ui.group.GroupDetailScreen
+import com.exemple.blockingapps.ui.group.GroupSettingsScreen // 👈 Nhớ import cái này
 import com.exemple.blockingapps.ui.history.RecommendationScreen
 import com.exemple.blockingapps.ui.history.UsageHistoryScreen
 import com.exemple.blockingapps.ui.home.HomeScreen
@@ -29,16 +32,18 @@ object Routes {
     const val RECOMMEND = "recommend"
     const val FACE = "face"
     const val GEOBLOCK = "geoblock"
-    const val GROUPS = "groups" // 👈 Add Groups route
+
+    // Group Routes
+    const val GROUPS = "groups"
+    const val GROUP_DETAIL = "group_detail/{groupId}/{groupName}"
+    // 👇 Route mới cho Settings
+    const val GROUP_SETTINGS = "group_settings/{groupName}/{joinCode}"
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
 @Composable
 fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
     val context = androidx.compose.ui.platform.LocalContext.current
-
-    // Mock ID for testing Groups (matches MainActivity logic)
-    val testUserId = "3fa85f64-5717-4562-b3fc-2c963f66afa6"
 
     NavHost(
         navController = navController,
@@ -57,7 +62,7 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
 
         composable(Routes.HOME) {
             HomeScreen(
-                viewModel = homeViewModel, // Pass viewModel if needed by Home
+                viewModel = homeViewModel,
                 onNavigateToFamily = { navController.navigate(Routes.FAMILY) },
                 onNavigateToBlockedApps = { navController.navigate(Routes.BLOCKED) },
                 onNavigateToTimeLimit = { navController.navigate(Routes.TIMELIMIT) },
@@ -68,9 +73,9 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
                 },
                 onNavigateToFace = { navController.navigate(Routes.FACE) },
                 onNavigateToGeoBlock = { navController.navigate(Routes.GEOBLOCK) },
-                // ADD YOUR GROUP NAVIGATION HERE
                 onNavigateToGroups = { navController.navigate(Routes.GROUPS) },
                 onLogout = {
+                    com.exemple.blockingapps.data.local.SessionManager.clearSession(context)
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
@@ -79,10 +84,9 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         }
 
         composable(Routes.BLOCKED) {
-            // Using logic from Input 3 (The most complete one)
             BlockedAppsScreen(
-                viewModel = homeViewModel, // Uncomment if BlockedAppsScreen needs it
-                onBack = { navController.popBackStack() } // Uncomment if BlockedAppsScreen needs it
+                viewModel = homeViewModel,
+                onBack = { navController.popBackStack() }
             )
         }
 
@@ -91,7 +95,7 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         }
 
         composable(Routes.TIMELIMIT) {
-            // Placeholder for TimeLimit screen
+            // Placeholder
         }
 
         composable(Routes.HISTORY) {
@@ -106,7 +110,7 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         }
 
         composable(Routes.FACE) {
-            // Placeholder for Face screen
+            // Placeholder
         }
 
         composable(Routes.GEOBLOCK) {
@@ -114,21 +118,72 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
             GeoBlockScreen(viewModel = geoViewModel)
         }
 
-        // ADD YOUR GROUP SCREEN COMPOSABLE
-        composable(Routes.GROUPS) {
-            val context = androidx.compose.ui.platform.LocalContext.current
-            val userId = com.exemple.blockingapps.data.local.SessionManager.getUserId(context)
+        // --- GROUP SCREENS ---
 
-            if (userId != null) {
-                com.exemple.blockingapps.ui.group.GroupScreen(currentUserId = userId)
+        composable(Routes.GROUPS) {
+            val realUserId = com.exemple.blockingapps.data.local.SessionManager.getUserId(context)
+
+            if (realUserId != null && realUserId.isNotEmpty()) {
+                com.exemple.blockingapps.ui.group.GroupScreen(
+                    currentUserId = realUserId,
+                    onGroupClick = { groupId, groupName ->
+                        navController.navigate("group_detail/$groupId/$groupName")
+                    }
+                )
             } else {
-                // If session expired or missing, force logout
                 LaunchedEffect(Unit) {
                     navController.navigate(Routes.LOGIN) {
                         popUpTo(Routes.HOME) { inclusive = true }
                     }
                 }
             }
+        }
+
+        composable(
+            route = Routes.GROUP_DETAIL,
+            arguments = listOf(
+                navArgument("groupId") { type = NavType.StringType },
+                navArgument("groupName") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val groupId = backStackEntry.arguments?.getString("groupId") ?: ""
+            val groupName = backStackEntry.arguments?.getString("groupName") ?: "Unknown Group"
+
+            val currentUserId = com.exemple.blockingapps.data.local.SessionManager.getUserId(context) ?: ""
+
+            val groupViewModel: com.exemple.blockingapps.ui.group.GroupViewModel = viewModel(
+                viewModelStoreOwner = navController.getBackStackEntry(Routes.GROUPS)
+            )
+
+            GroupDetailScreen(
+                groupId = groupId,
+                groupName = groupName,
+                currentUserId = currentUserId,
+                onBack = { navController.popBackStack() },
+                // 👇 Xử lý sự kiện bấm nút Settings
+                onSettingsClick = {
+                    val realJoinCode = groupViewModel.getJoinCodeForGroup(groupId)
+                    navController.navigate("group_settings/$groupName/$realJoinCode")
+                }
+            )
+        }
+
+        // 👇 Màn hình Settings mới
+        composable(
+            route = Routes.GROUP_SETTINGS,
+            arguments = listOf(
+                navArgument("groupName") { type = NavType.StringType },
+                navArgument("joinCode") { type = NavType.StringType }
+            )
+        ) { backStackEntry ->
+            val gName = backStackEntry.arguments?.getString("groupName") ?: ""
+            val jCode = backStackEntry.arguments?.getString("joinCode") ?: ""
+
+            GroupSettingsScreen(
+                groupName = gName,
+                joinCode = jCode,
+                onBack = { navController.popBackStack() }
+            )
         }
     }
 }
