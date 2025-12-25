@@ -3,10 +3,20 @@ package vn.edu.usth.blockappserver
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import org.jetbrains.exposed.sql.Database
+import org.jetbrains.exposed.sql.SchemaUtils
+import org.jetbrains.exposed.sql.transactions.transaction
+import vn.edu.usth.blockappserver.model.GroupMembers
+import vn.edu.usth.blockappserver.model.GroupRules
+import vn.edu.usth.blockappserver.model.Groups
+import vn.edu.usth.blockappserver.model.UsageLimits
+import vn.edu.usth.blockappserver.model.Users
 
 object DatabaseFactory {
     fun init() {
         Database.connect(hikari())
+        transaction {
+            SchemaUtils.create(Users, Groups, GroupMembers, UsageLimits, GroupRules) // 👈 Thêm cái này
+        }
     }
 
     private fun hikari(): HikariDataSource {
@@ -30,6 +40,7 @@ object DatabaseFactory {
         config.transactionIsolation = "TRANSACTION_REPEATABLE_READ"
         config.connectionTimeout = 30000
         config.validate()
+
 
         return HikariDataSource(config)
     }

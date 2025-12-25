@@ -37,7 +37,7 @@ fun Application.module() {
             call.respondText("Block App Server is running!")
         }
 
-        // GET: Fetch rules
+        // GLOBAL RULES
         get("/rules") {
             try {
                 val rules = transaction {
@@ -61,41 +61,9 @@ fun Application.module() {
             }
         }
 
-        get("/users/{id}/groups") {
-            try {
-                val userIdStr = call.parameters["id"]
-                if (userIdStr == null) {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing User ID"))
-                    return@get
-                }
-
-                val userUuid = UUID.fromString(userIdStr)
-
-                val groups = transaction {
-                    (Groups innerJoin GroupMembers)
-                        .select(Groups.groupId, Groups.name, Groups.joinCode, GroupMembers.role)
-                        .where { GroupMembers.userId eq userUuid }
-                        .map {
-                            mapOf(
-                                "groupId" to it[Groups.groupId].toString(),
-                                "groupName" to it[Groups.name],
-                                "joinCode" to it[Groups.joinCode],
-                                "role" to it[GroupMembers.role]
-                            )
-                        }
-                }
-                call.respond(groups)
-
-            } catch (e: Exception) {
-                e.printStackTrace()
-                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
-            }
-        }
-
         post("/rules") {
             try {
                 val rule = call.receive<BlockRuleDTO>()
-
                 transaction {
                     val existing = UsageLimits.selectAll()
                         .where { UsageLimits.packageName eq rule.packageName }
@@ -120,13 +88,13 @@ fun Application.module() {
                     }
                 }
                 call.respond(mapOf("status" to "success", "message" to "Saved successfully"))
-
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
             }
         }
 
+        // AUTHENTICATION
         post("/auth/register") {
             try {
                 val request = call.receive<RegisterRequest>()
@@ -174,7 +142,35 @@ fun Application.module() {
             }
         }
 
-        // --- GROUP MANAGEMENT APIs ---
+        get("/users/{id}/groups") {
+            try {
+                val userIdStr = call.parameters["id"]
+                if (userIdStr == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing User ID"))
+                    return@get
+                }
+                val userUuid = UUID.fromString(userIdStr)
+                val groups = transaction {
+                    (Groups innerJoin GroupMembers)
+                        .select(Groups.groupId, Groups.name, Groups.joinCode, GroupMembers.role)
+                        .where { GroupMembers.userId eq userUuid }
+                        .map {
+                            mapOf(
+                                "groupId" to it[Groups.groupId].toString(),
+                                "groupName" to it[Groups.name],
+                                "joinCode" to it[Groups.joinCode],
+                                "role" to it[GroupMembers.role]
+                            )
+                        }
+                }
+                call.respond(groups)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
+            }
+        }
+
+        // GROUP MANAGEMENT APIs
 
         post("/groups/create") {
             try {
@@ -198,16 +194,9 @@ fun Application.module() {
                     }
                     gId
                 }
-
                 call.respond(
-                    CreateGroupResponse(
-                        status = "success",
-                        message = "Group created successfully",
-                        groupId = newGroupId.toString(),
-                        joinCode = newJoinCode
-                    )
+                    CreateGroupResponse("success", "Group created successfully", newGroupId.toString(), newJoinCode)
                 )
-
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
@@ -224,7 +213,6 @@ fun Application.module() {
                     if (groupRow == null) return@transaction "Group not found"
 
                     val gId = groupRow[Groups.groupId]
-
                     val exists = GroupMembers.selectAll()
                         .where { (GroupMembers.groupId eq gId) and (GroupMembers.userId eq userUuid) }
                         .count() > 0
@@ -245,17 +233,15 @@ fun Application.module() {
                 } else {
                     call.respond(mapOf("status" to "success", "message" to resultMessage))
                 }
-
             } catch (e: Exception) {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
             }
         }
 
-        // 3. Get Members
+        // Get Members
         get("/groups/{id}/members") {
             val groupId = call.parameters["id"]
-
             try {
                 if (groupId == null) {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing Group ID"))
@@ -264,12 +250,7 @@ fun Application.module() {
 
                 val members = transaction {
                     (GroupMembers innerJoin Users)
-                        .select(
-                            Users.userId,
-                            Users.fullName,
-                            Users.email,
-                            GroupMembers.role
-                        )
+                        .select(Users.userId, Users.fullName, Users.email, GroupMembers.role)
                         .where { GroupMembers.groupId eq UUID.fromString(groupId) }
                         .map { row ->
                             GroupMemberResponse(
@@ -285,126 +266,122 @@ fun Application.module() {
                 e.printStackTrace()
                 call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
             }
+        }
+        // Leave Group
+        post("/groups/leave") {
+            try {
+                val req = call.receive<LeaveGroupRequest>()
+                val gId = UUID.fromString(req.groupId)
+                val uId = UUID.fromString(req.userId)
 
-            // 4. Leave Group
-            post("/groups/leave") {
-                try {
-                    val req = call.receive<LeaveGroupRequest>()
-                    val gId = UUID.fromString(req.groupId)
-                    val uId = UUID.fromString(req.userId)
+                val deletedCount = transaction {
+                    GroupMembers.deleteWhere {
+                        (GroupMembers.groupId eq gId) and (GroupMembers.userId eq uId)
+                    }
+                }
+                if (deletedCount > 0) {
+                    call.respond(mapOf("status" to "success", "message" to "Left group successfully"))
+                } else {
+                    call.respond(HttpStatusCode.NotFound, mapOf("error" to "Member not found in group"))
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
+            }
+        }
 
-                    val deletedCount = transaction {
-                        GroupMembers.deleteWhere {
-                            (GroupMembers.groupId eq gId) and (GroupMembers.userId eq uId)
-                        }
+        // Remove Member
+        post("/groups/remove") {
+            try {
+                val req = call.receive<RemoveMemberRequest>()
+                val gId = UUID.fromString(req.groupId)
+                val adminUuid = UUID.fromString(req.adminId)
+                val targetUuid = UUID.fromString(req.targetUserId)
+
+                val result = transaction {
+                    val adminRole = GroupMembers
+                        .select(GroupMembers.role)
+                        .where { (GroupMembers.groupId eq gId) and (GroupMembers.userId eq adminUuid) }
+                        .map { it[GroupMembers.role] }
+                        .singleOrNull()
+
+                    if (adminRole != "ADMIN") {
+                        return@transaction "Permission Denied: Only Admin can remove members"
+                    }
+                    if (adminUuid == targetUuid) {
+                        return@transaction "Cannot remove yourself. Use 'Leave Group' instead."
                     }
 
-                    if (deletedCount > 0) {
-                        call.respond(mapOf("status" to "success", "message" to "Left group successfully"))
+                    val deleted = GroupMembers.deleteWhere {
+                        (GroupMembers.groupId eq gId) and (GroupMembers.userId eq targetUuid)
+                    }
+                    if (deleted > 0) "Success" else "Target member not found"
+                }
+
+                if (result == "Success") {
+                    call.respond(mapOf("status" to "success", "message" to "Member removed"))
+                } else {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to result))
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
+            }
+        }
+        // 6. Get Rules of a Group (Member call)
+        get("/groups/{id}/rules") {
+            try {
+                val gIdStr = call.parameters["id"]
+                if (gIdStr == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing Group ID"))
+                    return@get
+                }
+
+                val rules = transaction {
+                    GroupRules.select(GroupRules.packageName, GroupRules.isBlocked)
+                        .where { GroupRules.groupId eq UUID.fromString(gIdStr) }
+                        .map {
+                            GroupRuleDTO(
+                                groupId = gIdStr,
+                                packageName = it[GroupRules.packageName],
+                                isBlocked = it[GroupRules.isBlocked]
+                            )
+                        }
+                }
+                call.respond(rules)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
+            }
+        }
+
+        // 7. Add/Update Group Rule (Admin call)
+        post("/groups/rules") {
+            try {
+                val req = call.receive<GroupRuleDTO>()
+                val gId = UUID.fromString(req.groupId)
+
+                transaction {
+                    val existing = GroupRules.selectAll()
+                        .where { (GroupRules.groupId eq gId) and (GroupRules.packageName eq req.packageName) }
+                        .singleOrNull()
+
+                    if (existing != null) {
+                        GroupRules.update({ (GroupRules.groupId eq gId) and (GroupRules.packageName eq req.packageName) }) {
+                            it[GroupRules.isBlocked] = req.isBlocked
+                        }
                     } else {
-                        call.respond(HttpStatusCode.NotFound, mapOf("error" to "Member not found in group"))
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
-                }
-            }
-
-            // 5. Remove Member
-            post("/groups/remove") {
-                try {
-                    val req = call.receive<RemoveMemberRequest>()
-                    val gId = UUID.fromString(req.groupId)
-                    val adminUuid = UUID.fromString(req.adminId)
-                    val targetUuid = UUID.fromString(req.targetUserId)
-
-                    val result = transaction {
-                        val adminRole = GroupMembers
-                            .select(GroupMembers.role)
-                            .where { (GroupMembers.groupId eq gId) and (GroupMembers.userId eq adminUuid) }
-                            .map { it[GroupMembers.role] }
-                            .singleOrNull()
-
-                        if (adminRole != "ADMIN") {
-                            return@transaction "Permission Denied: Only Admin can remove members"
-                        }
-
-                        if (adminUuid == targetUuid) {
-                            return@transaction "Cannot remove yourself. Use 'Leave Group' instead."
-                        }
-
-                        val deleted = GroupMembers.deleteWhere {
-                            (GroupMembers.groupId eq gId) and (GroupMembers.userId eq targetUuid)
-                        }
-
-                        if (deleted > 0) "Success" else "Target member not found"
-                    }
-
-                    if (result == "Success") {
-                        call.respond(mapOf("status" to "success", "message" to "Member removed"))
-                    } else {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to result))
-                    }
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
-                }
-            }
-            // 6. Get Rules of a Group (Member call)
-            get("/groups/{id}/rules") {
-                try {
-                    val gIdStr = call.parameters["id"]
-                    if (gIdStr == null) {
-                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing Group ID"))
-                        return@get
-                    }
-
-                    val rules = transaction {
-                        GroupRules.select(GroupRules.packageName, GroupRules.isBlocked)
-                            .where { GroupRules.groupId eq UUID.fromString(gIdStr) }
-                            .map {
-                                GroupRuleDTO(
-                                    groupId = gIdStr,
-                                    packageName = it[GroupRules.packageName],
-                                    isBlocked = it[GroupRules.isBlocked]
-                                )
-                            }
-                    }
-                    call.respond(rules)
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
-                }
-            }
-
-            // 7. Add/Update Group Rule (Admin call)
-            post("/groups/rules") {
-                try {
-                    val req = call.receive<GroupRuleDTO>()
-                    val gId = UUID.fromString(req.groupId)
-
-                    transaction {
-                        val existing = GroupRules.selectAll()
-                            .where { (GroupRules.groupId eq gId) and (GroupRules.packageName eq req.packageName) }
-                            .singleOrNull()
-
-                        if (existing != null) {
-                            GroupRules.update({ (GroupRules.groupId eq gId) and (GroupRules.packageName eq req.packageName) }) {
-                                it[isBlocked] = req.isBlocked
-                            }
-                        } else {
-                            GroupRules.insert {
-                                it[GroupRules.groupId] = gId
-                                it[GroupRules.packageName] = req.packageName
-                                it[GroupRules.isBlocked] = req.isBlocked
-                            }
+                        GroupRules.insert {
+                            it[GroupRules.groupId] = gId
+                            it[GroupRules.packageName] = req.packageName
+                            it[GroupRules.isBlocked] = req.isBlocked
                         }
                     }
-                    call.respond(mapOf("status" to "success", "message" to "Rule updated"))
-                } catch (e: Exception) {
-                    e.printStackTrace()
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
                 }
+                call.respond(mapOf("status" to "success", "message" to "Rule updated"))
+            } catch (e: Exception) {
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to e.message))
             }
         }
     }
