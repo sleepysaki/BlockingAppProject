@@ -1,106 +1,70 @@
+package com.exemple.blockingapps.ui.overlay
+
 import android.content.Context
+import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
+import android.view.Gravity
+import android.view.View
 import android.view.WindowManager
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ComposeView
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import androidx.lifecycle.*
-import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import androidx.savedstate.SavedStateRegistryController
-import androidx.savedstate.SavedStateRegistryOwner
+import android.widget.FrameLayout
+import android.widget.TextView
 
 class BlockOverlay(private val context: Context) {
     private val windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-    private var composeView: ComposeView? = null
+    private var overlayView: View? = null
 
     fun show() {
-        if (composeView != null) return
+        if (overlayView != null) return
 
-        composeView = ComposeView(context).apply {
-            setupViewOwners(this)
-
-            setContent {
-                BlockScreenContent()
-            }
+        val layout = FrameLayout(context).apply {
+            setBackgroundColor(Color.parseColor("#B71C1C"))
         }
 
+        val textView = TextView(context).apply {
+            text = "TIME'S UP!\n\nNo more distractions.\nGet back to work!"
+            textSize = 24f
+            setTextColor(Color.WHITE)
+            gravity = Gravity.CENTER
+            setTypeface(null, Typeface.BOLD)
+            setPadding(50, 0, 50, 0)
+        }
+
+        layout.addView(textView, FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            Gravity.CENTER
+        ))
+
+        overlayView = layout
+
+        // 2. Cấu hình hiển thị đè lên tất cả
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, // Loại cửa sổ Overlay
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
                     WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                    WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR or
-                    WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                    WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
             PixelFormat.TRANSLUCENT
-        ).apply {
-            screenOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        }
+        )
 
-        windowManager.addView(composeView, params)
-    }
-
-    @Composable
-    private fun BlockScreenContent() {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.9f)),
-            contentAlignment = Alignment.Center
-        ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(
-                    text = "TIME'S UP!",
-                    color = Color.Red,
-                    fontSize = 40.sp,
-                    fontWeight = FontWeight.ExtraBold,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Back to work, no more distractions!",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 40.dp)
-                )
-            }
+        try {
+            windowManager.addView(overlayView, params)
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
     fun hide() {
-        composeView?.let {
-            windowManager.removeView(it)
-            composeView = null
-        }
-    }
-
-    private fun setupViewOwners(view: ComposeView) {
-        val lifecycleOwner = object : LifecycleOwner {
-            override val lifecycle = LifecycleRegistry(this).apply {
-                handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-                handleLifecycleEvent(Lifecycle.Event.ON_START)
-                handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+        if (overlayView != null) {
+            try {
+                windowManager.removeView(overlayView)
+                overlayView = null
+            } catch (e: Exception) {
+                e.printStackTrace()
             }
         }
-        view.setViewTreeLifecycleOwner(lifecycleOwner)
-
-        val savedStateOwner = object : SavedStateRegistryOwner {
-            override val lifecycle = lifecycleOwner.lifecycle
-            override val savedStateRegistry = SavedStateRegistryController.create(this).let {
-                it.performRestore(null)
-                it.savedStateRegistry
-            }
-        }
-        view.setViewTreeSavedStateRegistryOwner(savedStateOwner)
     }
 }

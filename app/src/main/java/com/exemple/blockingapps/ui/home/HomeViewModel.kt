@@ -13,11 +13,15 @@ import com.exemple.blockingapps.data.model.DailyUsageSummary
 import com.exemple.blockingapps.data.model.UsageCategory
 import com.exemple.blockingapps.data.model.UsageRecord
 import com.exemple.blockingapps.data.repository.UsageDataProvider
+import com.exemple.blockingapps.model.network.RetrofitClient // 👈 Import Retrofit
+import com.exemple.blockingapps.utils.BlockManager // 👈 Import BlockManager
+import kotlinx.coroutines.Dispatchers // 👈 Import Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext // 👈 Import withContext
 import java.time.Duration
 import java.time.Instant
 
@@ -34,11 +38,46 @@ class HomeViewModel : ViewModel() {
     private val INSTANT_LOCK_DURATION_SECONDS = 3600L
 
     init {
-        syncBlockState()
+        // syncBlockState() -> Cái này là của FakeLocalDatabase, có thể giữ lại nếu muốn dùng song song
         startAllCountdowns()
     }
 
+    // 👇👇👇 QUAN TRỌNG: THÊM HÀM NÀY ĐỂ ĐỒNG BỘ GROUP RULES TỪ SERVER 👇👇👇
+    fun syncGroupRules(context: Context, userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                Log.d("HomeViewModel", "Starting syncGroupRules for user: $userId")
+
+                // 1. Lấy danh sách nhóm của user
+                val groups = RetrofitClient.api.getUserGroups(userId)
+
+                val allRules = mutableListOf<com.exemple.blockingapps.model.GroupRuleDTO>()
+
+                // 2. Lặp qua từng nhóm để lấy Rules
+                groups.forEach { group ->
+                    try {
+                        val rules = RetrofitClient.api.getGroupRules(group.groupId)
+                        allRules.addAll(rules)
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+
+                // 3. Lưu tổng hợp tất cả rules vào bộ nhớ máy (BlockManager)
+                withContext(Dispatchers.Main) {
+                    BlockManager.updateRules(context, allRules)
+                    Log.d("BlockManager", "Synced ${allRules.size} rules from Server. Blocked apps updated.")
+                }
+            } catch (e: Exception) {
+                Log.e("HomeViewModel", "Sync failed: ${e.message}")
+                e.printStackTrace()
+            }
+        }
+    }
+    // 👆👆👆 HẾT PHẦN THÊM MỚI 👆👆👆
+
     private fun createInitialState(context: Context? = null): HomeUiState {
+        // ... (Giữ nguyên code cũ của bạn) ...
         val devices = listOf(
             DeviceItem("DEV-001", "Kid - Pixel 5", "1h trước", false),
             DeviceItem("DEV-002", "Kid - Galaxy A12", "Vừa xong", true)
@@ -104,6 +143,8 @@ class HomeViewModel : ViewModel() {
         )
     }
 
+    // ... (Các hàm logic cũ giữ nguyên, không cần sửa gì thêm) ...
+
     fun selectDeviceForHistory(deviceId: String) {
         _uiState.value = _uiState.value.copy(selectedDeviceId = deviceId)
     }
@@ -130,13 +171,9 @@ class HomeViewModel : ViewModel() {
 
     fun addTimePreset(context: Context, label: String, start: String, end: String) {
         val newPreset = TimePreset(label = label, startTime = start, endTime = end)
-
         val updatedList = _uiState.value.timePresets + newPreset
         _uiState.value = _uiState.value.copy(timePresets = updatedList)
-
         FakeLocalDatabase.saveTimePresets(context, updatedList)
-
-        Log.d("PRESET", "Đã thêm preset mới: $label")
     }
 
     fun updateInstalledApps(apps: List<AppItem>) {
@@ -145,16 +182,12 @@ class HomeViewModel : ViewModel() {
 
     fun assignAppToPreset(context: Context, app: AppItem, preset: TimePreset) {
         val pkgName = app.packageName
-
         val currentSet = FakeLocalDatabase.loadBlockedPackages(context).toMutableSet()
         currentSet.add(pkgName)
         FakeLocalDatabase.saveBlockedPackages(context, currentSet)
-
         val prefs = context.getSharedPreferences("TimePresetPrefs", Context.MODE_PRIVATE)
         prefs.edit().putString("assign_$pkgName", preset.id).apply()
-
         syncBlockState(context)
-
         _uiState.value = _uiState.value.copy(
             blockedApps = _uiState.value.blockedApps + BlockedAppItem(
                 appId = pkgName,
@@ -165,28 +198,18 @@ class HomeViewModel : ViewModel() {
                 scheduleTo = preset.endTime
             )
         )
-
-        Log.d("PRESET", "Đã gán app ${app.name} vào khung giờ ${preset.label}")
     }
 
     fun deleteTimePreset(context: Context, presetId: String) {
         val currentList = _uiState.value.timePresets.toMutableList()
         currentList.removeAll { it.id == presetId }
-
         _uiState.value = _uiState.value.copy(timePresets = currentList)
-
         FakeLocalDatabase.saveTimePresets(context, currentList)
-
-        Log.d("PRESET", "Đã xóa preset: $presetId")
     }
 
     fun applyRecommendation(context: Context, rec: RecommendationItem) {
         val pkgName = rec.appId ?: return
-
-        if (pkgName == "com.exemple.blockingapps") {
-            Log.e("BLOCKER", "Dừng lại! Mày đang định tự sát bằng cách chặn chính mình.")
-            return
-        }
+        if (pkgName == "com.exemple.blockingapps") return
 
         val currentSet = FakeLocalDatabase.loadBlockedPackages(context).toMutableSet()
         currentSet.add(pkgName)
@@ -208,19 +231,13 @@ class HomeViewModel : ViewModel() {
 
         syncBlockState(context)
         BlockState.setInstantLockTime(INSTANT_LOCK_DURATION_SECONDS)
-
-        Log.d("DEBUG_REC", "Đã áp dụng chặn app: $pkgName và lưu vào ổ cứng")
     }
 
     fun refreshDataFromDisk(context: Context) {
         val blockedFromDisk = FakeLocalDatabase.loadBlockedPackages(context)
-
         val currentRecs = _uiState.value.recommendations
         val filteredRecs = currentRecs.filter { it.appId !in blockedFromDisk }
-
-        _uiState.value = _uiState.value.copy(
-            recommendations = filteredRecs
-        )
+        _uiState.value = _uiState.value.copy(recommendations = filteredRecs)
     }
 
     private fun syncBlockState(context: Context? = null) {
@@ -249,17 +266,12 @@ class HomeViewModel : ViewModel() {
             currentSet.remove(packageName)
             FakeLocalDatabase.saveBlockedPackages(context, currentSet)
         }
-
         val prefs = context.getSharedPreferences("TimePresetPrefs", Context.MODE_PRIVATE)
         prefs.edit().remove("assign_$packageName").apply()
-
         syncBlockState(context)
-
         _uiState.value = _uiState.value.copy(
             blockedApps = _uiState.value.blockedApps.filter { it.packageName != packageName }
         )
-
-        Log.d("REMOVE_APP", "Đã xóa triệt để app: $packageName")
     }
 
     fun lockAllNow() {

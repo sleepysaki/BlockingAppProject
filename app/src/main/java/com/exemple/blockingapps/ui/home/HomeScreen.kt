@@ -30,7 +30,7 @@ fun HomeScreen(
     onNavigateToRecommend: () -> Unit = {},
     onNavigateToFace: () -> Unit = {},
     onNavigateToGeoBlock: () -> Unit = {},
-    onNavigateToGroups: () -> Unit = {}, // 1. Added new parameter (From Input 1)
+    onNavigateToGroups: () -> Unit = {},
     onLogout: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -39,6 +39,18 @@ fun HomeScreen(
     val realName = remember {
         com.exemple.blockingapps.data.local.SessionManager.getUserName(context) ?: "User"
     }
+
+    val currentUserId = remember {
+        com.exemple.blockingapps.data.local.SessionManager.getUserId(context)
+    }
+
+    LaunchedEffect(currentUserId) {
+        if (!currentUserId.isNullOrEmpty()) {
+            // Gọi hàm sync vừa thêm trong ViewModel để tải danh sách chặn về máy
+            viewModel.syncGroupRules(context, currentUserId)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -89,7 +101,6 @@ fun HomeScreen(
                 FeatureTile("Usage History", "Charts and daily usage", onNavigateToHistory),
                 FeatureTile("Auto Recommendations", "Suggestions based on usage", onNavigateToRecommend),
                 FeatureTile("Location-based Blocking", "Block apps by zone", onNavigateToGeoBlock),
-                // 2. Inserted Group Feature (From Input 1)
                 FeatureTile("Groups / Workspace", "Create or join groups", onNavigateToGroups)
             )
 
@@ -169,7 +180,6 @@ fun HomeScreen(
                         }
 
                         Column(horizontalAlignment = Alignment.End) {
-                            // Using Input 3 logic (passing context) to avoid crash
                             IconButton(onClick = { viewModel.removeBlockedApp(app.appId, context) }) {
                                 Icon(imageVector = Icons.Default.Delete, contentDescription = "Remove")
                             }
