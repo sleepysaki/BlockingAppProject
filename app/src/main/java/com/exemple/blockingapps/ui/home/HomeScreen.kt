@@ -1,31 +1,47 @@
 package com.exemple.blockingapps.ui.home
 
-
 import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.launch
-import kotlin.time.Duration.Companion.seconds
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
-    viewModel: HomeViewModel = remember { HomeViewModel() },
+    viewModel: HomeViewModel = androidx.lifecycle.viewmodel.compose.viewModel(),
     onNavigateToFamily: () -> Unit = {},
     onNavigateToBlockedApps: () -> Unit = {},
     onNavigateToTimeLimit: () -> Unit = {},
@@ -37,6 +53,12 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+
+    // Tự động load lại dữ liệu mỗi khi màn hình Home hiển thị
+    LaunchedEffect(Unit) {
+        viewModel.refreshAllData(context)
+        viewModel.startTimeTicker(context)
+    }
 
     Scaffold(
         topBar = {
@@ -52,13 +74,7 @@ fun HomeScreen(
                 ExtendedFloatingActionButton(
                     text = { Text("Lock Now") },
                     onClick = { viewModel.lockAllNow() },
-                    icon = { Icon(Icons.Filled.Lock, contentDescription = "Lock") },
-                    modifier = Modifier,
-                    expanded = true,
-                    shape = FloatingActionButtonDefaults.extendedFabShape,
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    elevation = FloatingActionButtonDefaults.elevation(),
+                    icon = { Icon(Icons.Filled.Lock, contentDescription = "Lock") }
                 )
             }
         }
@@ -86,8 +102,7 @@ fun HomeScreen(
                 FeatureTile("Family Members", "View and manage child devices", onNavigateToFamily),
                 FeatureTile("Blocked Apps", "Manage blocked apps and schedules", onNavigateToBlockedApps),
                 FeatureTile("Time Limits", "See remaining time per app", onNavigateToTimeLimit),
-                FeatureTile("Lock Child Device", "Instant lock all apps on selected device") { viewModel.lockAllNow() },
-                FeatureTile("Face Recognition", "Manage face profiles", onNavigateToFace),
+                FeatureTile("Lock Child Device", "Instant lock all apps", { viewModel.lockAllNow() }),
                 FeatureTile("Usage History", "Charts and daily usage", onNavigateToHistory),
                 FeatureTile("Auto Recommendations", "Suggestions based on usage", onNavigateToRecommend),
                 FeatureTile("Location-based Blocking", "Block apps by zone", onNavigateToGeoBlock)
@@ -97,91 +112,42 @@ fun HomeScreen(
 
             items(features) { ft ->
                 Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 6.dp)
-                        .clickable { ft.action.invoke() }
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp).clickable { ft.action() }
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
+                    Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(ft.title, fontWeight = FontWeight.SemiBold)
-                            Spacer(modifier = Modifier.height(4.dp))
                             Text(ft.subtitle, style = MaterialTheme.typography.bodySmall)
                         }
-                        Icon(
-                            imageVector = Icons.Default.ArrowForward,
-                            contentDescription = "Go",
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(20.dp))
                     }
                 }
             }
 
-            item { Spacer(Modifier.height(12.dp)) }
+            item { Text("Blocked / Limited apps", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 16.dp)) }
 
-            item {
-                Text("Linked devices", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
-                Spacer(Modifier.height(6.dp))
-            }
-            items(uiState.devices) { d ->
+            items(uiState.blockedApps, key = { it.appId }) { app ->
                 Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
                     Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(d.deviceName, fontWeight = FontWeight.Medium)
-                            Text("ID: ${d.deviceId}", style = MaterialTheme.typography.bodySmall)
+                            Text(app.appName, fontWeight = FontWeight.Medium)
+                            Text("Category: ${app.category}", style = MaterialTheme.typography.bodySmall)
+                            if (app.remainingSeconds > 0L) {
+                                val mins = app.remainingSeconds / 60
+                                val secs = app.remainingSeconds % 60
+                                Text("Remaining: ${mins}m ${secs}s", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
+                            }
                         }
-                        IconButton(onClick = { viewModel.removeDevice(d.deviceId) }) {
+                        IconButton(onClick = { viewModel.removeBlockedApp(app.appId, context) }) {
                             Icon(imageVector = Icons.Default.Delete, contentDescription = "Remove")
                         }
                     }
                 }
             }
 
-            item { Spacer(Modifier.height(10.dp)) }
-
-            item {
-                Text("Blocked / Limited apps", style = MaterialTheme.typography.titleMedium)
-                Spacer(Modifier.height(6.dp))
-            }
-
-            items(uiState.blockedApps) { app ->
-                Card(modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(app.appName, fontWeight = FontWeight.Medium)
-                            Spacer(Modifier.height(4.dp))
-                            Text("Category: ${app.category}", style = MaterialTheme.typography.bodySmall)
-                            Spacer(Modifier.height(4.dp))
-                            if (app.remainingSeconds > 0L) {
-                                val mins = (app.remainingSeconds / 60)
-                                val secs = (app.remainingSeconds % 60)
-                                Text("Remaining: ${mins}m ${secs}s", style = MaterialTheme.typography.bodySmall)
-                            } else {
-                                Text("Limit: ${app.dailyLimitMinutes} min/day", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-
-                        Column(horizontalAlignment = Alignment.End) {
-                            IconButton(onClick = { viewModel.removeBlockedApp(app.appId, context) }) {
-                                Icon(imageVector = Icons.Default.Delete, contentDescription = "Remove")
-                            }
-                        }
-                    }
-                }
-            }
-
-            item { Spacer(Modifier.height(24.dp)) }
+            item { Spacer(Modifier.height(80.dp)) }
         }
     }
 }
 
-private data class FeatureTile(
-    val title: String,
-    val subtitle: String,
-    val action: () -> Unit
-)
+private data class FeatureTile(val title: String, val subtitle: String, val action: () -> Unit)

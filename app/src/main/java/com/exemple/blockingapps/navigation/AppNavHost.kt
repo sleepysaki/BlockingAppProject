@@ -16,6 +16,7 @@ import com.exemple.blockingapps.ui.history.RecommendationScreen
 import com.exemple.blockingapps.ui.history.UsageHistoryScreen
 import com.exemple.blockingapps.ui.home.HomeScreen
 import com.exemple.blockingapps.ui.home.HomeViewModel
+import com.exemple.blockingapps.ui.timelimits.TimeLimitScreen
 
 object Routes {
     const val LOGIN = "login"
@@ -78,7 +79,9 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         composable(Routes.FAMILY) {
             FamilyManagementScreen(viewModel = homeViewModel)
         }
-        composable(Routes.TIMELIMIT) { }
+        composable(Routes.TIMELIMIT) {
+            TimeLimitScreen(viewModel = homeViewModel, onBack = { navController.popBackStack() })
+        }
         composable(Routes.HISTORY) {
             UsageHistoryScreen(viewModel = homeViewModel)
         }

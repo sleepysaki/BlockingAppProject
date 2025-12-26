@@ -1,11 +1,7 @@
 package com.exemple.blockingapps.ui.geoblock
 
-import android.annotation.SuppressLint
 import android.content.Context
-import android.content.Intent
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.exemple.blockingapps.data.model.AppItem
@@ -22,26 +18,23 @@ class GeoBlockViewModel : ViewModel() {
     fun getInstalledApps(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = context.packageManager
+            val alreadyBlocked = com.exemple.blockingapps.data.local.FakeLocalDatabase.loadBlockedPackages(context)
 
             val allApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
 
             val apps = allApps.mapNotNull { info ->
                 val launchIntent = pm.getLaunchIntentForPackage(info.packageName)
-
                 if (launchIntent != null) {
                     AppItem(
                         name = info.loadLabel(pm).toString(),
                         packageName = info.packageName,
                         icon = info.loadIcon(pm),
-                        isSelected = false
+                        isSelected = alreadyBlocked.contains(info.packageName)
                     )
-                } else {
-                    null
-                }
+                } else null
             }.filter { it.packageName != context.packageName }
                 .sortedBy { it.name }
 
-            Log.d("LIST_APP", "Sau khi lọc còn: ${apps.size} apps thực tế")
             _appList.value = apps
         }
     }
@@ -52,5 +45,20 @@ class GeoBlockViewModel : ViewModel() {
                 if (it.packageName == packageName) it.copy(isSelected = !it.isSelected) else it
             }
         }
+    }
+
+    fun saveGeoBlocking(context: Context, selectedLocation: com.google.android.gms.maps.model.LatLng) {
+        val selectedAppPackages = _appList.value.filter { it.isSelected }.map { it.packageName }.toSet()
+
+        com.exemple.blockingapps.data.local.FakeLocalDatabase.saveBlockedPackages(context, selectedAppPackages)
+
+        com.exemple.blockingapps.data.common.BlockState.blockedPackages = selectedAppPackages
+
+        com.exemple.blockingapps.utils.LocationPrefs.saveTargetLocation(
+            context,
+            selectedLocation.latitude,
+            selectedLocation.longitude,
+            100f
+        )
     }
 }

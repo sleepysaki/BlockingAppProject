@@ -1,11 +1,30 @@
 package com.exemple.blockingapps.ui.geoblock
 
+import android.widget.Toast
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -15,11 +34,12 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
-import com.exemple.blockingapps.data.common.BlockState
-import com.google.maps.android.compose.*
-import android.widget.Toast
-import com.exemple.blockingapps.data.local.FakeLocalDatabase
-import com.exemple.blockingapps.utils.LocationPrefs
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapProperties
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 
 @Composable
 fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
@@ -104,14 +124,7 @@ fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
                 Button(
                     onClick = {
                         selectedLocation?.let { loc ->
-                            val selectedAppSet = apps.filter { it.isSelected }.map { it.packageName }.toSet()
-
-                            FakeLocalDatabase.saveBlockedPackages(context, selectedAppSet)
-
-                            BlockState.blockedPackages = selectedAppSet
-
-                            LocationPrefs.saveTargetLocation(context, loc.latitude, loc.longitude, 100f)
-
+                            viewModel.saveGeoBlocking(context, loc)
                             Toast.makeText(context, "KÍCH HOẠT THÀNH CÔNG!", Toast.LENGTH_LONG).show()
                         }
                     },
