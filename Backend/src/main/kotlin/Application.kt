@@ -17,10 +17,6 @@ fun Application.module() {
     } catch (e: Exception) {
         println("❌ Database Connection Failed: ${e.message}")
     }
-
-    // 2. Cấu hình JSON
     configureSerialization()
-
-    // 3. Cấu hình API Routing
     configureRouting()
 }

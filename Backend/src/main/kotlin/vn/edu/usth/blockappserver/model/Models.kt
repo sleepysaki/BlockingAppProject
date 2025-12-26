@@ -64,6 +64,13 @@ object GroupRules : Table("group_rules") {
     }
     override val primaryKey = PrimaryKey(ruleId)
 }
+object InstalledApps : Table("installed_apps") {
+    val deviceId = varchar("device_id", 255)
+    val packageName = varchar("package_name", 255)
+    val appName = varchar("app_name", 255)
+    val lastUpdated = timestamp("last_updated").defaultExpression(CurrentTimestamp)
+    override val primaryKey = PrimaryKey(deviceId, packageName)
+}
 
 // --- DTOs (Data Transfer Objects) ---
 

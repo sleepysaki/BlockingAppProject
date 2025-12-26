@@ -64,10 +64,22 @@ fun Application.configureRouting() {
         post("/api/devices/sync") {
             try {
                 val req = call.receive<SyncAppsRequest>()
-                println("Received Sync from ${req.deviceId}: ${req.installedApps.size} apps")
-                call.respond(HttpStatusCode.OK)
+                println("DEBUG: Received Sync from ${req.deviceId}: ${req.installedApps.size} apps")
+
+                transaction {
+                    InstalledApps.deleteWhere { InstalledApps.deviceId eq req.deviceId }
+
+                    InstalledApps.batchInsert(req.installedApps) { app ->
+                        this[InstalledApps.deviceId] = req.deviceId
+                        this[InstalledApps.packageName] = app.packageName
+                        this[InstalledApps.appName] = app.appName
+                    }
+                }
+
+                call.respond(HttpStatusCode.OK, mapOf("status" to "success", "message" to "Apps saved to DB"))
             } catch (e: Exception) {
-                call.respond(HttpStatusCode.BadRequest)
+                e.printStackTrace()
+                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Sync failed: ${e.message}"))
             }
         }
 

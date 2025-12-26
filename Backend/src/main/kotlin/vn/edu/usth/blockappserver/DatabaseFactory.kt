@@ -11,8 +11,7 @@ object DatabaseFactory {
     fun init() {
         Database.connect(hikari())
         transaction {
-            // Tự động tạo bảng nếu chưa có
-            SchemaUtils.createMissingTablesAndColumns(Users, Groups, GroupMembers, UsageLimits, GroupRules)
+            SchemaUtils.createMissingTablesAndColumns(Users, Groups, GroupMembers, UsageLimits, GroupRules, InstalledApps)
         }
     }
 
