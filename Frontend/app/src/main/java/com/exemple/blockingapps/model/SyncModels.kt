@@ -13,5 +13,6 @@ data class AppInfoDTO(
 data class GroupDTO(
     val groupId: String,
     val groupName: String,
-    val role: String? = "MEMBER"
+    val role: String? = "MEMBER",
+    val inviteCode: String? = null
 )

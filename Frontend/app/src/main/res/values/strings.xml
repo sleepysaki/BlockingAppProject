@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">BlockingApps</string>
+    <string name="title_activity_block_page">BlockPageActivity</string>
 </resources>

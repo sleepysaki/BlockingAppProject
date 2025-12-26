@@ -6,66 +6,53 @@ import android.content.Intent
 import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
-import com.exemple.blockingapps.data.local.FakeLocalDatabase
-import com.exemple.blockingapps.ui.overlay.BlockOverlayActivity // Import Activity mới
 import com.exemple.blockingapps.utils.BlockManager
 import com.exemple.blockingapps.utils.LocationPrefs
+import com.exemple.blockingapps.ui.block.BlockPageActivity
 import com.google.android.gms.location.*
 
 class AppBlockerAccessibilityService : AccessibilityService() {
 
-    // --- Location Components ---
     private lateinit var fusedLocationClient: FusedLocationProviderClient
     private var isInsideTargetZone = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        Log.d("BlockService", "Service Connected - Ready to block!")
-
-        // Khởi tạo Location Client
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
-        try {
-            startBackgroundLocationUpdates()
-        } catch (e: Exception) {
-            Log.e("BlockService", "Error starting location updates: ${e.message}")
-        }
+        startBackgroundLocationUpdates()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // 1. Kiểm tra sự kiện mở cửa sổ
-        if (event == null) return
-        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        if (event == null || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
 
         val packageName = event.packageName?.toString() ?: return
 
-        // 2. Bỏ qua chính App mình và Cài đặt (để tránh bị khóa ngoài không tắt được)
-        if (packageName == this.packageName || packageName == "com.android.settings") return
+        // 1. Tuyệt đối không chặn chính mình và hệ thống
+        if (packageName == "com.exemple.blockingapps" ||
+            packageName == "com.android.settings" ||
+            packageName == "com.android.systemui" ||
+            packageName.contains("launcher")
+        ) return
 
-        Log.d("BlockService", "Checking package: $packageName")
+        Log.d("BlockService", "Checking: $packageName")
 
-        // 3. Logic chặn theo Nhóm (Time Schedule) - Code mới thêm
-        // Hàm này trong BlockManager đã check giờ rồi
+        // 2. Kiểm tra luật chặn (Lịch trình & Vị trí)
+        // Mình gộp logic: Nếu BlockManager bảo chặn app này vào lúc này
         if (BlockManager.isAppBlocked(this, packageName)) {
-            Log.d("BlockService", "BLOCKED by Group/Time: $packageName")
-            showBlockScreen() // Gọi hàm hiện màn hình đỏ
-            return
-        }
 
-        // 4. Logic chặn theo Vị trí (Geo Blocking) - Code cũ giữ nguyên
-        val geoBlockedApps = FakeLocalDatabase.loadBlockedPackages(this)
-        if (packageName in geoBlockedApps && isInsideTargetZone) {
-            Log.d("BlockService", "BLOCKED by Geo: $packageName")
-            showBlockScreen() // Gọi hàm hiện màn hình đỏ
-            return
+            // 👉 KIỂM TRA THÊM VỊ TRÍ (Nếu bạn muốn luật này chỉ áp dụng khi ở trong Zone)
+            // Nếu bạn muốn chặn bất kể vị trí, chỉ cần gọi showBlockScreen() luôn.
+            // Nếu muốn "Chỉ chặn Youtube khi ở trường", hãy dùng:
+            // if (packageName == "com.google.android.youtube" && !isInsideTargetZone) return
+
+            showBlockScreen()
         }
     }
 
-    // --- Hàm mới: Khởi động màn hình chặn (BlockOverlayActivity) ---
     private fun showBlockScreen() {
-        val intent = Intent(this, BlockOverlayActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        val intent = Intent(this, BlockPageActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        }
         startActivity(intent)
     }
 
@@ -83,16 +70,13 @@ class AppBlockerAccessibilityService : AccessibilityService() {
                         location.latitude, location.longitude,
                         target.first, target.second, results
                     )
-
                     isInsideTargetZone = results[0] <= target.third
                 }
             }, Looper.getMainLooper())
-        } catch (e: SecurityException) {
-            Log.e("BlockService", "Thiếu quyền vị trí!")
+        } catch (e: Exception) {
+            Log.e("BlockService", "Location update error: ${e.message}")
         }
     }
 
-    override fun onInterrupt() {
-        // Không làm gì
-    }
+    override fun onInterrupt() {}
 }

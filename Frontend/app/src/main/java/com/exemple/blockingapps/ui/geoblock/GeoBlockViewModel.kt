@@ -85,11 +85,13 @@ class GeoBlockViewModel : ViewModel() {
                         radius = 100.0
                     )
 
-                    Log.d("DEBUG_GEO", "Sending Rule: $rule")
-
-                    // Handle API response as Map to avoid JSON parsing errors
-                    val response = RetrofitClient.api.addBlockRule(rule)
-                    serverMessage = response["message"] ?: "Saved"
+                    // SỬA LỖI: Truy cập body() của Response trước khi lấy "message"
+                    val response = RetrofitClient.apiService.addBlockRule(rule)
+                    if (response.isSuccessful) {
+                        serverMessage = response.body()?.get("message") ?: "Saved"
+                    } else {
+                        Log.e("DEBUG_GEO", "Error code: ${response.code()}")
+                    }
                 }
 
                 // Update local state immediately

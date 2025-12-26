@@ -17,6 +17,7 @@ import com.exemple.blockingapps.ui.family.FamilyManagementScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockViewModel
 import com.exemple.blockingapps.ui.group.GroupDetailScreen
+import com.exemple.blockingapps.ui.group.GroupManagementScreen
 import com.exemple.blockingapps.ui.group.GroupSettingsScreen
 import com.exemple.blockingapps.ui.group.GroupViewModel
 import com.exemple.blockingapps.ui.history.RecommendationScreen
@@ -198,6 +199,12 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
                 joinCode = jCode,
                 onBack = { navController.popBackStack() },
                 viewModel = groupViewModel
+            )
+        }
+        composable("group_management") {
+            GroupManagementScreen(
+                viewModel = homeViewModel,
+                onBack = { navController.popBackStack() }
             )
         }
     }

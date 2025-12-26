@@ -44,7 +44,6 @@ fun BlockedAppsScreen(
     val context = LocalContext.current
     var showAddDialog by remember { mutableStateOf(false) }
     var selectedPreset by remember { mutableStateOf<TimePreset?>(null) }
-
     var searchQuery by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
@@ -56,164 +55,156 @@ fun BlockedAppsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Quản lý chặn", fontWeight = FontWeight.Bold) },
+                title = { Text("Manage Blocking", fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = null)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    TextButton(
+                        onClick = {
+                            val rulesToSave = uiState.blockedApps.map { app ->
+                                // Adjusting to match your actual BlockRule data class structure
+                                com.exemple.blockingapps.model.BlockRule(
+                                    packageName = app.packageName,
+                                    isBlocked = true,
+                                    startTime = app.scheduleFrom,
+                                    endTime = app.scheduleTo,
+                                    limitMinutes = 0 // Adding missing mandatory parameter
+                                )
+                            }
+                            com.exemple.blockingapps.utils.BlockManager.saveRulesFromUI(context, rulesToSave)
+                            android.widget.Toast.makeText(context, "Settings Saved & Applied!", android.widget.Toast.LENGTH_SHORT).show()
+                        }
+                    ) {
+                        Text("SAVE", fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             )
         }
     ) { padding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Khung giờ chặn (Presets)", style = MaterialTheme.typography.titleMedium)
-            Spacer(Modifier.height(8.dp))
-
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                item {
-                    OutlinedCard(
-                        onClick = { showAddDialog = true },
-                        modifier = Modifier.size(width = 100.dp, height = 90.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-                    ) {
-                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                            Icon(Icons.Default.Add, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        }
-                    }
-                }
-                items(uiState.timePresets) { preset ->
-                    val isSelected = selectedPreset?.id == preset.id
-
-                    Box(modifier = Modifier.padding(end = 4.dp)) {
-                        Card(
-                            onClick = { selectedPreset = preset },
-                            modifier = Modifier.size(width = 150.dp, height = 90.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
-                                else MaterialTheme.colorScheme.surfaceVariant
-                            ),
-                            border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
-                        ) {
-                            Column(
-                                Modifier.padding(12.dp).fillMaxSize(),
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text(preset.label, fontWeight = FontWeight.Bold, maxLines = 1)
-                                Text("${preset.startTime} - ${preset.endTime}", style = MaterialTheme.typography.bodySmall)
-                            }
-                        }
-
-                        IconButton(
-                            onClick = {
-                                viewModel.deleteTimePreset(context, preset.id)
-                                if (selectedPreset?.id == preset.id) selectedPreset = null
-                            },
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .size(30.dp)
-                                .padding(4.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = "Xóa Preset",
-                                tint = Color.Red.copy(alpha = 0.7f),
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
-
-            Spacer(Modifier.height(24.dp))
-            Divider()
-            Spacer(Modifier.height(16.dp))
-
-            Text("Chọn ứng dụng để áp dụng", style = MaterialTheme.typography.titleMedium)
-
-            if (selectedPreset == null) {
-                Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
-                    Text("Vui lòng chọn một khung giờ phía trên", color = Color.Gray)
-                }
-            } else {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text("Tìm tên ứng dụng...") },
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    singleLine = true
-                )
-
+            item {
                 Text(
-                    "Đang gán cho: ${selectedPreset?.label}",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall
+                    "Blocking Presets",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier.padding(top = 16.dp)
                 )
-
-                val filteredApps = geoApps.filter { app ->
-                    val matchesSearch = app.name.contains(searchQuery, ignoreCase = true) ||
-                            app.packageName.contains(searchQuery, ignoreCase = true)
-                    matchesSearch
-                }
-
-                LazyColumn(modifier = Modifier.weight(1f)) {
-                    items(filteredApps) { app ->
-                        ListItem(
-                            leadingContent = {
-                                val iconBitmap = remember(app.packageName) {
-                                    app.icon?.toBitmap()?.asImageBitmap()
-                                }
-                                if (iconBitmap != null) {
-                                    Image(bitmap = iconBitmap, contentDescription = null, modifier = Modifier.size(40.dp))
-                                } else {
-                                    Icon(Icons.Default.Block, null)
-                                }
-                            },
-                            headlineContent = { Text(app.name) },
-                            // supportingContent = { Text(app.packageName) },
-                            trailingContent = {
-                                Button(
-                                    onClick = {
-                                        viewModel.assignAppToPreset(context, app, selectedPreset!!)
-                                        android.widget.Toast.makeText(context, "Đã gán ${app.name}", android.widget.Toast.LENGTH_SHORT).show()
-                                    }
-                                ) {
-                                    Text("Gán")
-                                }
+                Spacer(Modifier.height(8.dp))
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    item {
+                        OutlinedCard(
+                            onClick = { showAddDialog = true },
+                            modifier = Modifier.size(width = 100.dp, height = 90.dp),
+                            shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                        ) {
+                            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                Icon(Icons.Default.Add, null, tint = MaterialTheme.colorScheme.primary)
                             }
-                        )
+                        }
                     }
-                }
-            }
-
-            Spacer(Modifier.height(16.dp))
-            Text("Ứng dụng đang trong lịch trình", fontWeight = FontWeight.Bold)
-
-            LazyColumn(modifier = Modifier.heightIn(max = 200.dp)) {
-                val timedApps = uiState.blockedApps.filter { it.scheduleFrom != null }
-                items(timedApps) { app ->
-                    Card(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F1F1))
-                    ) {
-                        Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Column(Modifier.weight(1f)) {
-                                Text(app.appName, fontWeight = FontWeight.SemiBold)
-                                Text("Chặn: ${app.scheduleFrom} - ${app.scheduleTo}", fontSize = 12.sp, color = Color.Red)
+                    items(uiState.timePresets) { preset ->
+                        val isSelected = selectedPreset?.id == preset.id
+                        Box {
+                            Card(
+                                onClick = { selectedPreset = preset },
+                                modifier = Modifier.size(width = 150.dp, height = 90.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer
+                                    else MaterialTheme.colorScheme.surfaceVariant
+                                ),
+                                border = if (isSelected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
+                            ) {
+                                Column(Modifier.padding(12.dp).fillMaxSize(), verticalArrangement = Arrangement.Center) {
+                                    Text(preset.label, fontWeight = FontWeight.Bold, maxLines = 1)
+                                    Text("${preset.startTime} - ${preset.endTime}", style = MaterialTheme.typography.bodySmall)
+                                }
                             }
-                            IconButton(onClick = { viewModel.removeBlockedApp(app.appId, context) }) {
-                                Icon(Icons.Default.Delete, contentDescription = "Xóa", tint = Color.Gray)
+                            IconButton(
+                                onClick = {
+                                    viewModel.deleteTimePreset(context, preset.id)
+                                    if (selectedPreset?.id == preset.id) selectedPreset = null
+                                },
+                                modifier = Modifier.align(Alignment.TopEnd).size(32.dp).padding(4.dp)
+                            ) {
+                                Icon(Icons.Default.Close, null, tint = Color.Red.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
                             }
                         }
                     }
                 }
             }
+
+            item {
+                Divider()
+                Text("Select Apps to Block", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 8.dp))
+
+                if (selectedPreset == null) {
+                    Text("Please select a preset above", color = Color.Gray, modifier = Modifier.padding(vertical = 20.dp))
+                } else {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text("Search app name...") },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                    Text("Assigning to: ${selectedPreset?.label}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+
+            if (selectedPreset != null) {
+                val filteredApps = geoApps.filter { it.name.contains(searchQuery, ignoreCase = true) }
+                items(filteredApps) { app ->
+                    ListItem(
+                        leadingContent = {
+                            val iconBitmap = remember(app.packageName) { app.icon?.toBitmap()?.asImageBitmap() }
+                            if (iconBitmap != null) Image(iconBitmap, null, modifier = Modifier.size(40.dp))
+                            else Icon(Icons.Default.Block, null)
+                        },
+                        headlineContent = { Text(app.name) },
+                        trailingContent = {
+                            Button(onClick = {
+                                viewModel.assignAppToPreset(context, app, selectedPreset!!)
+                                android.widget.Toast.makeText(context, "Added ${app.name}", android.widget.Toast.LENGTH_SHORT).show()
+                            }) { Text("Assign") }
+                        }
+                    )
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(16.dp))
+                Text("Currently Scheduled Apps", fontWeight = FontWeight.Bold)
+            }
+
+            val timedApps = uiState.blockedApps.filter { it.scheduleFrom != null }
+            items(timedApps) { app ->
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
+                ) {
+                    Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(app.appName, fontWeight = FontWeight.SemiBold)
+                            Text("Blocked: ${app.scheduleFrom} - ${app.scheduleTo}", fontSize = 12.sp, color = Color.Red)
+                        }
+                        IconButton(onClick = { viewModel.removeBlockedApp(app.appId, context) }) {
+                            Icon(Icons.Default.Delete, null, tint = Color.Gray)
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(Modifier.height(50.dp)) }
         }
     }
 
@@ -239,40 +230,39 @@ fun AddPresetDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Thêm khung giờ mới") },
+        title = { Text("Add New Preset") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 OutlinedTextField(
                     value = label,
                     onValueChange = { label = it },
-                    label = { Text("Tên gợi nhớ (VD: Giờ học bài)") },
+                    label = { Text("Preset Label (e.g. Focus Time)") },
                     modifier = Modifier.fillMaxWidth()
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(
                         value = startTime,
                         onValueChange = { startTime = it },
-                        label = { Text("Bắt đầu") },
+                        label = { Text("Start") },
                         modifier = Modifier.weight(1f)
                     )
                     OutlinedTextField(
                         value = endTime,
                         onValueChange = { endTime = it },
-                        label = { Text("Kết thúc") },
+                        label = { Text("End") },
                         modifier = Modifier.weight(1f)
                     )
                 }
-                Text("Định dạng: HH:mm (24h)", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
         },
         confirmButton = {
             Button(
                 enabled = label.isNotBlank(),
                 onClick = { onSave(label, startTime, endTime) }
-            ) { Text("Lưu") }
+            ) { Text("Save") }
         },
         dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Hủy") }
+            TextButton(onClick = onDismiss) { Text("Cancel") }
         }
     )
 }

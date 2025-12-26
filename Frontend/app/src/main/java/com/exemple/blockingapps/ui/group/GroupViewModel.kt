@@ -38,69 +38,61 @@ class GroupViewModel : ViewModel() {
     }
 
     fun fetchMyGroups(userId: String) {
-        _myGroups.value = emptyList()
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val groups = RetrofitClient.api.getUserGroups(userId)
-                _myGroups.value = groups
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+                val response = RetrofitClient.apiService.getUserGroups(userId)
+                if (response.isSuccessful) {
+                    val groups = response.body() ?: emptyList()
+                    withContext(Dispatchers.Main) {
+                        _myGroups.value = groups.map {
+                            UserGroup(it.groupId, it.groupName ?: "", it.role ?: "", it.inviteCode ?: "")
+                        }
+                    }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
     fun createGroup(context: Context, groupName: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val req = CreateGroupRequest(name = groupName, adminId = userId)
-                val response = RetrofitClient.api.createGroup(req)
-
+                val response = RetrofitClient.apiService.createGroup(userId, groupName)
                 withContext(Dispatchers.Main) {
-                    if (response.status == "success") {
-                        _currentJoinCode.value = response.joinCode
-                        Toast.makeText(context, "Group Created! Code: ${response.joinCode}", Toast.LENGTH_LONG).show()
+                    if (response.isSuccessful) {
+                        val data = response.body()
+                        _currentJoinCode.value = data?.joinCode ?: ""
+                        Toast.makeText(context, "Group Created! Code: ${data?.joinCode}", Toast.LENGTH_LONG).show()
                         fetchMyGroups(userId)
                     } else {
-                        Toast.makeText(context, "Failed: ${response.message}", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, "Failed to create group", Toast.LENGTH_SHORT).show()
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
     fun joinGroup(context: Context, joinCode: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val req = JoinGroupRequest(joinCode = joinCode, userId = userId)
-                val response = RetrofitClient.api.joinGroup(req)
-
+                val response = RetrofitClient.apiService.joinGroup(userId, joinCode)
                 withContext(Dispatchers.Main) {
-                    val msg = response["message"] ?: "Unknown response"
-                    if (response["status"] == "success") {
+                    val body = response.body()
+                    if (response.isSuccessful && body?.get("status") == "success") {
                         Toast.makeText(context, "Joined Successfully!", Toast.LENGTH_SHORT).show()
                         fetchMyGroups(userId)
                     } else {
+                        val msg = body?.get("message") ?: "Error ${response.code()}"
                         Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
     fun fetchMembers(groupId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val list = RetrofitClient.api.getGroupMembers(groupId)
+                val list = RetrofitClient.apiService.getGroupMembers(groupId)
                 _members.value = list
             } catch (e: Exception) {
                 Log.e("GroupVM", "Error fetching members", e)
@@ -112,14 +104,16 @@ class GroupViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val req = LeaveGroupRequest(groupId, userId)
-                val res = RetrofitClient.api.leaveGroup(req)
+                val res = RetrofitClient.apiService.leaveGroup(req)
+                val body = res.body()
                 withContext(Dispatchers.Main) {
-                    if (res["status"] == "success") {
+                    if (res.isSuccessful && body?.get("status") == "success") {
                         Toast.makeText(context, "Left group successfully", Toast.LENGTH_SHORT).show()
                         onSuccess()
                         fetchMyGroups(userId)
                     } else {
-                        Toast.makeText(context, "Failed: ${res["error"]}", Toast.LENGTH_SHORT).show()
+                        val errorMsg = body?.get("error") ?: body?.get("message") ?: "Unknown error"
+                        Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
@@ -133,13 +127,15 @@ class GroupViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val req = RemoveMemberRequest(groupId, adminId, targetUserId)
-                val res = RetrofitClient.api.removeMember(req)
+                val res = RetrofitClient.apiService.removeMember(req)
+                val body = res.body()
                 withContext(Dispatchers.Main) {
-                    if (res["status"] == "success") {
+                    if (res.isSuccessful && body?.get("status") == "success") {
                         Toast.makeText(context, "Member removed", Toast.LENGTH_SHORT).show()
                         fetchMembers(groupId)
                     } else {
-                        Toast.makeText(context, "Failed: ${res["error"]}", Toast.LENGTH_SHORT).show()
+                        val errorMsg = body?.get("error") ?: body?.get("message") ?: "Unknown error"
+                        Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
@@ -152,11 +148,11 @@ class GroupViewModel : ViewModel() {
     fun fetchGroupRules(groupId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val rules = RetrofitClient.api.getGroupRules(groupId)
-                _groupRules.value = rules
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+                val response = RetrofitClient.apiService.getGroupRules(groupId)
+                if (response.isSuccessful) {
+                    _groupRules.value = response.body() ?: emptyList()
+                }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
@@ -164,13 +160,14 @@ class GroupViewModel : ViewModel() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val rule = GroupRuleDTO(groupId, packageName, isBlocked)
-                val res = RetrofitClient.api.updateGroupRule(rule)
-
+                val res = RetrofitClient.apiService.updateGroupRule(rule)
+                val body = res.body()
                 withContext(Dispatchers.Main) {
-                    if (res["status"] == "success") {
+                    if (res.isSuccessful && body?.get("status") == "success") {
                         fetchGroupRules(groupId)
                     } else {
-                        Toast.makeText(context, "Failed: ${res["error"]}", Toast.LENGTH_SHORT).show()
+                        val errorMsg = body?.get("error") ?: body?.get("message") ?: "Unknown error"
+                        Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {

@@ -3,6 +3,7 @@ package com.exemple.blockingapps.ui.home
 import android.icu.text.CaseMap
 import com.exemple.blockingapps.data.model.AppItem
 import com.exemple.blockingapps.data.model.DailyUsageSummary
+import com.exemple.blockingapps.model.GroupDTO
 
 data class HomeUiState(
     val username: String = "Parent User",
@@ -18,7 +19,8 @@ data class HomeUiState(
     val error: String? = null,
     val usageHistory: Map<String, List<DailyUsageSummary>> = emptyMap(),
     val selectedDeviceId: String? = null,
-)
+    val groups: List<GroupDTO> = emptyList()
+    )
 
 data class DeviceItem(
     val deviceId: String,
