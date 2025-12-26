@@ -9,14 +9,18 @@ object SessionManager {
     private const val KEY_USER_NAME = "user_name"
     private const val KEY_IS_LOGGED_IN = "is_logged_in"
 
+    private const val KEY_USER_ROLE = "user_role"
+
+
     private fun getPrefs(context: Context): SharedPreferences {
         return context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
     }
 
-    fun saveUserSession(context: Context, userId: String, fullName: String) {
+    fun saveUserSession(context: Context, userId: String, fullName: String, role: String) {
         val editor = getPrefs(context).edit()
         editor.putString(KEY_USER_ID, userId)
         editor.putString(KEY_USER_NAME, fullName)
+        editor.putString(KEY_USER_ROLE, role)
         editor.putBoolean(KEY_IS_LOGGED_IN, true)
         editor.apply()
     }
@@ -36,6 +40,10 @@ object SessionManager {
     }
     fun getUserName(context: Context): String? {
         return getPrefs(context).getString("user_name", "User")
+    }
+
+    fun getUserRole(context: Context): String {
+        return getPrefs(context).getString(KEY_USER_ROLE, "PARENT")!!
     }
 
 }

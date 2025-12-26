@@ -15,6 +15,8 @@ import com.exemple.blockingapps.data.local.SessionManager // Đảm bảo import
 import com.exemple.blockingapps.data.model.LoginRequest
 import com.exemple.blockingapps.data.model.RegisterRequest
 
+enum class UserRole { PARENT, CHILD }
+
 @Composable
 fun LoginScreen(
     onLoginSuccess: () -> Unit,
@@ -22,6 +24,9 @@ fun LoginScreen(
 ) {
     // State toggle between Login and Register mode
     var isRegisterMode by remember { mutableStateOf(false) }
+
+    var selectedRole by remember { mutableStateOf(UserRole.PARENT) }
+
 
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -60,8 +65,10 @@ fun LoginScreen(
                 label = { Text("Full Name") },
                 modifier = Modifier.fillMaxWidth()
             )
-            Spacer(modifier = Modifier.height(16.dp))
+
+            Spacer(modifier = Modifier.height(20.dp))
         }
+
 
         OutlinedTextField(
             value = email,
@@ -82,12 +89,57 @@ fun LoginScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        if (isRegisterMode) {
+            Text(
+                text = "Account Type",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp),
+                horizontalArrangement = Arrangement.SpaceEvenly,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = selectedRole == UserRole.PARENT,
+                        onClick = { selectedRole = UserRole.PARENT }
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Parent")
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    RadioButton(
+                        selected = selectedRole == UserRole.CHILD,
+                        onClick = { selectedRole = UserRole.CHILD }
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Child")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+
         // ACTION BUTTON (Login or Register)
         Button(
             onClick = {
                 if (isRegisterMode) {
                     // Handle Register
-                    val req = RegisterRequest(email, password, fullName, role = "PARENT")
+                    val req = RegisterRequest(
+                        email = email,
+                        password = password,
+                        fullName = fullName,
+                        role = selectedRole.name // "PARENT" or "CHILD"
+                    )
                     viewModel.register(context, req) {
                         // On success register, switch back to login to force user to sign in
                         isRegisterMode = false

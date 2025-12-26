@@ -29,7 +29,9 @@ class AuthViewModel : ViewModel() {
                     SessionManager.saveUserSession(
                         context,
                         userId = response.user.id,
-                        fullName = response.user.fullName
+                        fullName = response.user.fullName,
+                        role = response.user.role
+
                     )
 
                     Toast.makeText(context, "Login Successful!", Toast.LENGTH_SHORT).show()

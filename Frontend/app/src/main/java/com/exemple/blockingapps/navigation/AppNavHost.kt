@@ -12,6 +12,7 @@ import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.exemple.blockingapps.data.local.SessionManager
 import com.exemple.blockingapps.ui.blockedapps.BlockedAppsScreen
 import com.exemple.blockingapps.ui.family.FamilyManagementScreen
 import com.exemple.blockingapps.ui.geoblock.GeoBlockScreen
@@ -25,11 +26,15 @@ import com.exemple.blockingapps.ui.history.UsageHistoryScreen
 import com.exemple.blockingapps.ui.home.HomeScreen
 import com.exemple.blockingapps.ui.home.HomeViewModel
 import com.exemple.blockingapps.ui.login.LoginScreen
+import com.exemple.blockingapps.ui.home.ChildHomeScreen
 
 
 object Routes {
+    const val AVAILABLE_APPS = "available_apps"
+    const val BLOCK_APPS = "block_apps"
     const val LOGIN = "login"
-    const val HOME = "home"
+    const val PARENT_HOME = "parent_home"
+    const val CHILD_HOME = "child_home"
     const val BLOCKED = "blocked"
     const val FAMILY = "family"
     const val TIMELIMIT = "timelimit"
@@ -58,14 +63,22 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         composable(Routes.LOGIN) {
             LoginScreen(
                 onLoginSuccess = {
-                    navController.navigate(Routes.HOME) {
+                    val role = SessionManager.getUserRole(context)
+
+                    val destination = when (role) {
+                        "CHILD" -> Routes.CHILD_HOME
+                        else -> Routes.PARENT_HOME
+                    }
+
+                    navController.navigate(destination) {
                         popUpTo(Routes.LOGIN) { inclusive = true }
                     }
                 }
+
             )
         }
 
-        composable(Routes.HOME) {
+        composable(Routes.PARENT_HOME) {
             HomeScreen(
                 viewModel = homeViewModel,
                 onNavigateToFamily = { navController.navigate(Routes.FAMILY) },
@@ -82,7 +95,21 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
                 onLogout = {
                     com.exemple.blockingapps.data.local.SessionManager.clearSession(context)
                     navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.HOME) { inclusive = true }
+                        popUpTo(Routes.PARENT_HOME) { inclusive = true }
+                    }
+                }
+            )
+        }
+
+        composable(Routes.CHILD_HOME) {
+            ChildHomeScreen(
+                viewModel = homeViewModel,
+                onNavigateToAvailableApp = { navController.navigate(Routes.AVAILABLE_APPS) },
+                onNavigateToBlockApp = { navController.navigate(Routes.BLOCK_APPS) },
+                onLogout = {
+                    SessionManager.clearSession(context)
+                    navController.navigate(Routes.LOGIN) {
+                        popUpTo(Routes.CHILD_HOME) { inclusive = true }
                     }
                 }
             )
@@ -139,7 +166,7 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
             } else {
                 LaunchedEffect(Unit) {
                     navController.navigate(Routes.LOGIN) {
-                        popUpTo(Routes.HOME) { inclusive = true }
+                        popUpTo(Routes.PARENT_HOME) { inclusive = true }
                     }
                 }
             }
@@ -207,5 +234,18 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
                 onBack = { navController.popBackStack() }
             )
         }
+
+        composable(Routes.AVAILABLE_APPS) {
+            com.exemple.blockingapps.ui.home.AvailableAppScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.BLOCK_APPS) {
+            com.exemple.blockingapps.ui.home.BlockAppScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
     }
 }
