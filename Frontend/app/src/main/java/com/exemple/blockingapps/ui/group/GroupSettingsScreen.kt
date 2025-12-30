@@ -1,238 +1,239 @@
 package com.exemple.blockingapps.ui.group
 
-import android.app.TimePickerDialog
-import android.content.Context
+import android.widget.Toast
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ContentCopy // Icon copy
+import androidx.compose.material.icons.filled.Share // Icon share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager // Để copy
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
-import java.util.Calendar
-import java.util.Locale
-import com.exemple.blockingapps.ui.appblock.AppBlockViewModel
+import com.exemple.blockingapps.data.model.AppItem
+import com.exemple.blockingapps.model.GroupRuleDTO
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GroupSettingsScreen(
     groupId: String,
-    // --- KHÔI PHỤC CÁC THAM SỐ CŨ ĐỂ KHỚP VỚI APPNAVHOST ---
-    groupName: String,
-    joinCode: String,
     onBack: () -> Unit,
-    viewModel: GroupViewModel = viewModel() // Giữ tham số này dù không dùng cho việc chặn app
-    // --------------------------------------------------------
+    viewModel: GroupViewModel = viewModel()
 ) {
-    // 1. Vẫn khởi tạo AppBlockViewModel để xử lý chặn app
-    val appBlockViewModel: AppBlockViewModel = viewModel()
-
-    // 2. Lấy danh sách rules
-    val rules by appBlockViewModel.rules.collectAsState()
-
+    val rules by viewModel.groupRules.collectAsState()
+    val installedApps by viewModel.installedApps.collectAsState()
     val context = LocalContext.current
-    val groupIdLong = groupId.toLongOrNull() ?: 0L
+    val clipboardManager = LocalClipboardManager.current // Quản lý clipboard
 
-    val commonApps = listOf(
-        "com.google.android.youtube" to "YouTube",
-        "com.facebook.katana" to "Facebook",
-        "com.zhiliaoapp.musically" to "TikTok",
-        "com.google.android.gm" to "Gmail",
-        "com.android.chrome" to "Chrome"
-    )
+    // Lấy Join Code từ ViewModel
+    // Lưu ý: Đảm bảo ViewModel đã load danh sách nhóm để có thể tìm thấy code
+    val joinCode = remember(groupId) { viewModel.getJoinCodeForGroup(groupId) }
+
+    var showAddDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(groupId) {
+        viewModel.fetchGroupRules(context, groupId)
+        viewModel.loadInstalledApps(context)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings: $groupName") }, // Có thể hiển thị tên nhóm ở đây
+                title = { Text("Settings & Invite") }, // Đổi tiêu đề chút cho hợp
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = { showAddDialog = true }) {
+                Icon(Icons.Default.Add, contentDescription = "Add Rule")
+            }
         }
     ) { padding ->
-        LazyColumn(
+        Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
+                .padding(16.dp)
         ) {
-            // Hiển thị mã tham gia (Join Code) nếu cần
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+                    .clickable {
+                        clipboardManager.setText(AnnotatedString(joinCode))
+                        Toast.makeText(context, "Copied Code: $joinCode", Toast.LENGTH_SHORT).show()
+                    }
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(16.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text("Group Info", style = MaterialTheme.typography.titleSmall)
-                        Text("Join Code: $joinCode", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Group Join Code",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Text(
+                        text = joinCode,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary,
+                        letterSpacing = 2.sp
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Tap to copy",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Divider()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Blocked Apps List",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 👇 DANH SÁCH APP CHẶN (CODE CŨ)
+            if (rules.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
+                    Text("No rules configured yet. Tap + to add.", style = MaterialTheme.typography.bodyMedium)
+                }
+            } else {
+                LazyColumn(modifier = Modifier.weight(1f)) {
+                    items(rules) { rule ->
+                        GroupRuleItem(
+                            rule = rule,
+                            onToggle = { isBlocked ->
+                                viewModel.updateGroupRule(context, groupId, rule.packageName, isBlocked)
+                            }
+                        )
                     }
                 }
             }
-
-            item {
-                Text(
-                    text = "App Blocking Rules",
-                    style = MaterialTheme.typography.titleMedium,
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    color = MaterialTheme.colorScheme.primary
-                )
-            }
-
-            items(commonApps) { (pkg, name) ->
-                val existingRule = rules.find { it.packageName == pkg }
-                val isBlocked = existingRule?.isBlocked == true
-                val startTime = existingRule?.startTime ?: "00:00"
-                val endTime = existingRule?.endTime ?: "23:59"
-
-                AppRuleItem(
-                    appName = name,
-                    packageName = pkg,
-                    isBlocked = isBlocked,
-                    startTime = startTime,
-                    endTime = endTime,
-                    onToggle = { newState ->
-                        appBlockViewModel.updateRule(
-                            groupId = groupIdLong,
-                            packageName = pkg,
-                            isBlocked = newState,
-                            startTime = startTime,
-                            endTime = endTime
-                        )
-                    },
-                    onTimeChange = { newStart, newEnd ->
-                        appBlockViewModel.updateRule(
-                            groupId = groupIdLong,
-                            packageName = pkg,
-                            isBlocked = isBlocked,
-                            startTime = newStart,
-                            endTime = newEnd
-                        )
-                    },
-                    context = context
-                )
-                Divider()
-            }
         }
-    }
-}
 
-// ... (Các hàm AppRuleItem, TimeSelector, showTimePicker giữ nguyên như cũ) ...
-@Composable
-fun AppRuleItem(
-    appName: String,
-    packageName: String,
-    isBlocked: Boolean,
-    startTime: String,
-    endTime: String,
-    onToggle: (Boolean) -> Unit,
-    onTimeChange: (String, String) -> Unit,
-    context: Context
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp)
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = appName, style = MaterialTheme.typography.titleMedium)
-                Text(
-                    text = packageName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
-            }
-            Switch(
-                checked = isBlocked,
-                onCheckedChange = onToggle
+        if (showAddDialog) {
+            SelectAppDialog(
+                apps = installedApps,
+                onDismiss = { showAddDialog = false },
+                onAppSelected = { app ->
+                    viewModel.addGroupRule(context, groupId, app)
+                    showAddDialog = false
+                }
             )
         }
-
-        if (isBlocked) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                TimeSelector(
-                    label = "From",
-                    time = startTime,
-                    context = context,
-                    onTimeSelected = { newTime -> onTimeChange(newTime, endTime) }
-                )
-
-                TimeSelector(
-                    label = "To",
-                    time = endTime,
-                    context = context,
-                    onTimeSelected = { newTime -> onTimeChange(startTime, newTime) }
-                )
-            }
-        }
     }
 }
 
 @Composable
-fun TimeSelector(
-    label: String,
-    time: String,
-    context: Context,
-    onTimeSelected: (String) -> Unit
+fun SelectAppDialog(
+    apps: List<AppItem>,
+    onDismiss: () -> Unit,
+    onAppSelected: (AppItem) -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .clickable {
-                showTimePicker(context, time) { selectedTime ->
-                    onTimeSelected(selectedTime)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Select App to Block") },
+        text = {
+            LazyColumn(modifier = Modifier.height(300.dp)) {
+                items(apps) { app ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onAppSelected(app) }
+                            .padding(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        app.icon?.let { drawable ->
+                            Image(
+                                bitmap = drawable.toBitmap().asImageBitmap(),
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp)
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(text = app.name, style = MaterialTheme.typography.bodyMedium)
+                    }
+                    HorizontalDivider()
                 }
             }
-            .padding(4.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Default.AccessTime,
-            contentDescription = "Time",
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Spacer(modifier = Modifier.width(4.dp))
-        Text(text = "$label: ", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
-        Text(text = time, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.primary)
-    }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        }
+    )
 }
 
-fun showTimePicker(context: Context, currentTime: String, onTimePicked: (String) -> Unit) {
-    val calendar = Calendar.getInstance()
-    try {
-        val parts = currentTime.split(":")
-        if (parts.size == 2) {
-            calendar.set(Calendar.HOUR_OF_DAY, parts[0].toInt())
-            calendar.set(Calendar.MINUTE, parts[1].toInt())
-        }
-    } catch (e: Exception) { e.printStackTrace() }
+@Composable
+fun GroupRuleItem(
+    rule: GroupRuleDTO,
+    onToggle: (Boolean) -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(16.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = rule.packageName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold
+                )
 
-    TimePickerDialog(
-        context,
-        { _, hourOfDay, minute ->
-            val formattedTime = String.format(Locale.getDefault(), "%02d:%02d", hourOfDay, minute)
-            onTimePicked(formattedTime)
-        },
-        calendar.get(Calendar.HOUR_OF_DAY),
-        calendar.get(Calendar.MINUTE),
-        true
-    ).show()
+                val info = when {
+                    rule.radius != null && rule.radius > 0 -> "Geo-Blocking Active"
+                    !rule.startTime.isNullOrEmpty() -> "Time: ${rule.startTime} - ${rule.endTime}"
+                    else -> "Manual Block"
+                }
+                Text(text = info, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
+            }
+
+            Switch(
+                checked = rule.isBlocked,
+                onCheckedChange = { isChecked ->
+                    onToggle(isChecked)
+                }
+            )
+        }
+    }
 }

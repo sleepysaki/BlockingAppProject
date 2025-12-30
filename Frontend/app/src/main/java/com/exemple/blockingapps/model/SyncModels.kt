@@ -14,5 +14,5 @@ data class GroupDTO(
     val groupId: String,
     val groupName: String,
     val role: String? = "MEMBER",
-    val inviteCode: String? = null
+    val inviteCode: String? = null,
 )

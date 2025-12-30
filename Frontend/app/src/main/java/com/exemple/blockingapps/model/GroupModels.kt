@@ -49,5 +49,8 @@ data class GroupRuleDTO(
     val packageName: String,
     val isBlocked: Boolean,
     val startTime: String? = null,
-    val endTime: String? = null
+    val endTime: String? = null,
+    val latitude: Double? = null,
+    val longitude: Double? = null,
+    val radius: Double? = null
 )

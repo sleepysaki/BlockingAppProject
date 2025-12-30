@@ -4,10 +4,9 @@ import android.os.Build
 import androidx.annotation.RequiresApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
-import androidx.lifecycle.ViewModelStoreOwner
-import androidx.compose.runtime.remember
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -26,7 +25,6 @@ import com.exemple.blockingapps.ui.home.HomeScreen
 import com.exemple.blockingapps.ui.home.HomeViewModel
 import com.exemple.blockingapps.ui.login.LoginScreen
 
-
 object Routes {
     const val LOGIN = "login"
     const val HOME = "home"
@@ -38,11 +36,12 @@ object Routes {
     const val FACE = "face"
     const val GEOBLOCK = "geoblock"
 
-    // Group Routes
+    
     const val GROUPS = "groups"
     const val GROUP_DETAIL = "group_detail/{groupId}/{groupName}"
 
-    const val GROUP_SETTINGS = "group_settings/{groupId}/{groupName}/{joinCode}"
+    
+    const val GROUP_SETTINGS = "group_settings/{groupId}"
 }
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -100,7 +99,7 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         }
 
         composable(Routes.TIMELIMIT) {
-            // Placeholder
+            
         }
 
         composable(Routes.HISTORY) {
@@ -115,7 +114,7 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         }
 
         composable(Routes.FACE) {
-            // Placeholder
+            
         }
 
         composable(Routes.GEOBLOCK) {
@@ -123,11 +122,11 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
             GeoBlockScreen(viewModel = geoViewModel)
         }
 
-        // --- GROUP SCREENS ---
+        
 
         composable(Routes.GROUPS) {
             val realUserId = com.exemple.blockingapps.data.local.SessionManager.getUserId(context)
-            val groupViewModel: GroupViewModel = viewModel()
+            
 
             if (realUserId != null && realUserId.isNotEmpty()) {
                 com.exemple.blockingapps.ui.group.GroupScreen(
@@ -158,6 +157,7 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
             val currentUserId =
                 com.exemple.blockingapps.data.local.SessionManager.getUserId(context) ?: ""
 
+            
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(Routes.GROUPS)
             }
@@ -169,8 +169,8 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
                 currentUserId = currentUserId,
                 onBack = { navController.popBackStack() },
                 onSettingsClick = {
-                    val realJoinCode = groupViewModel.getJoinCodeForGroup(groupId)
-                    navController.navigate("group_settings/$groupId/$groupName/$realJoinCode")
+                    
+                    navController.navigate("group_settings/$groupId")
                 },
                 viewModel = groupViewModel
             )
@@ -179,28 +179,25 @@ fun AppNavHost(navController: NavHostController, homeViewModel: HomeViewModel) {
         composable(
             route = Routes.GROUP_SETTINGS,
             arguments = listOf(
-                navArgument("groupId") { type = NavType.StringType },
-                navArgument("groupName") { type = NavType.StringType },
-                navArgument("joinCode") { type = NavType.StringType }
+                navArgument("groupId") { type = NavType.StringType }
+                
             )
         ) { backStackEntry ->
             val gId = backStackEntry.arguments?.getString("groupId") ?: ""
-            val gName = backStackEntry.arguments?.getString("groupName") ?: ""
-            val jCode = backStackEntry.arguments?.getString("joinCode") ?: ""
 
             val parentEntry = remember(backStackEntry) {
                 navController.getBackStackEntry(Routes.GROUPS)
             }
             val groupViewModel: GroupViewModel = viewModel(parentEntry)
 
+            
             GroupSettingsScreen(
                 groupId = gId,
-                groupName = gName,
-                joinCode = jCode,
                 onBack = { navController.popBackStack() },
                 viewModel = groupViewModel
             )
         }
+
         composable("group_management") {
             GroupManagementScreen(
                 viewModel = homeViewModel,

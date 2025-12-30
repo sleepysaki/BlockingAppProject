@@ -14,37 +14,46 @@ import com.google.android.gms.location.*
 class AppBlockerAccessibilityService : AccessibilityService() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+
+    
     private var isInsideTargetZone = false
 
     override fun onServiceConnected() {
         super.onServiceConnected()
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         startBackgroundLocationUpdates()
+        Log.d("BlockService", "Service Connected & Location Updates Started")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (event == null || event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        
+        if (event == null) return
+
+        
+        if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
+            event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
+            return
+        }
 
         val packageName = event.packageName?.toString() ?: return
 
-        // 1. Tuyệt đối không chặn chính mình và hệ thống
-        if (packageName == "com.exemple.blockingapps" ||
-            packageName == "com.android.settings" ||
-            packageName == "com.android.systemui" ||
-            packageName.contains("launcher")
-        ) return
+        
+        
+        if (packageName == this.packageName || 
+            packageName == "com.android.systemui" || 
+            packageName == "com.android.settings" || 
+            packageName.contains("launcher") || 
+            packageName.contains("inputmethod") 
+        ) {
+            return
+        }
 
-        Log.d("BlockService", "Checking: $packageName")
+        
+        Log.d("BlockService", "Checking App: $packageName | Zone: $isInsideTargetZone")
 
-        // 2. Kiểm tra luật chặn (Lịch trình & Vị trí)
-        // Mình gộp logic: Nếu BlockManager bảo chặn app này vào lúc này
-        if (BlockManager.isAppBlocked(this, packageName)) {
-
-            // 👉 KIỂM TRA THÊM VỊ TRÍ (Nếu bạn muốn luật này chỉ áp dụng khi ở trong Zone)
-            // Nếu bạn muốn chặn bất kể vị trí, chỉ cần gọi showBlockScreen() luôn.
-            // Nếu muốn "Chỉ chặn Youtube khi ở trường", hãy dùng:
-            // if (packageName == "com.google.android.youtube" && !isInsideTargetZone) return
-
+        
+        if (BlockManager.isAppBlocked(this, packageName, isInsideTargetZone)) {
+            Log.d("BlockService", "BLOCCCKED: $packageName")
             showBlockScreen()
         }
     }
@@ -59,18 +68,37 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     @SuppressLint("MissingPermission")
     private fun startBackgroundLocationUpdates() {
         try {
+            
             val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000).build()
+
             fusedLocationClient.requestLocationUpdates(locationRequest, object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
                     val location = locationResult.lastLocation ?: return
-                    val target = LocationPrefs.getTargetLocation(this@AppBlockerAccessibilityService) ?: return
+
+                    
+                    val target = LocationPrefs.getTargetLocation(this@AppBlockerAccessibilityService)
+
+                    if (target == null) {
+                        isInsideTargetZone = false
+                        return
+                    }
 
                     val results = FloatArray(1)
                     android.location.Location.distanceBetween(
                         location.latitude, location.longitude,
                         target.first, target.second, results
                     )
-                    isInsideTargetZone = results[0] <= target.third
+
+                    val distanceInMeters = results[0]
+                    val radius = target.third
+
+                    
+                    val wasInside = isInsideTargetZone
+                    isInsideTargetZone = distanceInMeters <= radius
+
+                    if (wasInside != isInsideTargetZone) {
+                        Log.d("BlockService", "Zone Status Changed: Inside=$isInsideTargetZone (Dist: $distanceInMeters m)")
+                    }
                 }
             }, Looper.getMainLooper())
         } catch (e: Exception) {

@@ -13,6 +13,7 @@ import com.exemple.blockingapps.data.model.*
 import com.exemple.blockingapps.data.network.RetrofitClient
 import com.exemple.blockingapps.data.repo.AppRepository
 import com.exemple.blockingapps.data.repository.UsageDataProvider
+import com.exemple.blockingapps.model.CreateGroupRequest
 import com.exemple.blockingapps.model.GroupRuleDTO
 import com.exemple.blockingapps.utils.BlockManager
 import kotlinx.coroutines.Dispatchers
@@ -46,7 +47,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         fetchUserGroups(currentUserId)
     }
 
-    
+
 
     fun fetchUserGroups(userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -70,9 +71,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun createGroup(groupName: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = RetrofitClient.apiService.createGroup(currentUserId, groupName)
+                // SỬA ĐOẠN NÀY
+                val request = CreateGroupRequest(
+                    name = groupName,
+                    adminId = currentUserId
+                )
+
+                val response = RetrofitClient.apiService.createGroup(request)
+
                 if (response.isSuccessful) {
+                    Log.d("HomeViewModel", "Group created successfully")
                     fetchUserGroups(currentUserId)
+                } else {
+                    Log.e("HomeViewModel", "Failed to create: ${response.code()}")
                 }
             } catch (e: Exception) {
                 Log.e("HomeViewModel", "Error creating group: ${e.message}")
@@ -136,7 +147,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         syncBlockState()
     }
 
-    
+
 
     fun refreshDataFromDisk(context: Context) {
         val prefs = context.getSharedPreferences("blocked_apps_pref", Context.MODE_PRIVATE)
@@ -178,7 +189,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val updatedList = _uiState.value.blockedApps.filterNot { it.packageName == packageName }
         _uiState.value = _uiState.value.copy(blockedApps = updatedList)
 
-        
+
         val rulesToSave = updatedList.map { item ->
             com.exemple.blockingapps.model.BlockRule(
                 packageName = item.packageName,
@@ -192,7 +203,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         syncBlockState()
     }
 
-    
+
 
     fun addDevice(deviceName: String, deviceId: String) {
         val newDevice = DeviceItem(deviceId = deviceId, deviceName = deviceName, lastActive = "now", isConnected = true)
@@ -203,7 +214,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(devices = _uiState.value.devices.filterNot { it.deviceId == deviceId })
     }
 
-    
+
 
     fun loadRealUsageAndGenerateRecs(context: Context) {
         viewModelScope.launch {
@@ -245,7 +256,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         syncBlockState()
     }
 
-    
+
 
     fun lockAllNow() {
         instantLockJob?.cancel()
@@ -274,7 +285,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         currentList.add(newItem)
         _uiState.value = _uiState.value.copy(blockedApps = currentList)
 
-        
+
         val rulesToSave = currentList.map { item ->
             com.exemple.blockingapps.model.BlockRule(
                 packageName = item.packageName,

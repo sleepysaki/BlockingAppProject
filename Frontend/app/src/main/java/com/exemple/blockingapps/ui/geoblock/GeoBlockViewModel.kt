@@ -7,9 +7,11 @@ import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.exemple.blockingapps.data.common.BlockState
 import com.exemple.blockingapps.data.model.AppItem
+import com.exemple.blockingapps.model.GroupRuleDTO
 import com.exemple.blockingapps.model.network.RetrofitClient
+import com.exemple.blockingapps.utils.BlockManager
+import com.exemple.blockingapps.utils.LocationPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +20,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 class GeoBlockViewModel : ViewModel() {
-    // Use AppItem model to match frontend structure
     private val _appList = MutableStateFlow<List<AppItem>>(emptyList())
     val appList = _appList.asStateFlow()
 
@@ -28,7 +29,6 @@ class GeoBlockViewModel : ViewModel() {
             val allApps = pm.getInstalledApplications(PackageManager.GET_META_DATA)
 
             val apps = allApps.mapNotNull { info ->
-                // Filter using launch intent to exclude system services
                 val launchIntent = pm.getLaunchIntentForPackage(info.packageName)
                 if (launchIntent != null) {
                     AppItem(
@@ -43,7 +43,6 @@ class GeoBlockViewModel : ViewModel() {
             }.filter { it.packageName != context.packageName }
                 .sortedBy { it.name }
 
-            Log.d("LIST_APP", "Loaded ${apps.size} launchable apps")
             _appList.value = apps
         }
     }
@@ -56,7 +55,6 @@ class GeoBlockViewModel : ViewModel() {
         }
     }
 
-    // Logic to send blocking rules to server
     fun activateBlocking(context: Context, latitude: Double, longitude: Double) {
         Log.d("DEBUG_GEO", "ViewModel received: Lat=$latitude, Long=$longitude")
 
@@ -71,8 +69,29 @@ class GeoBlockViewModel : ViewModel() {
                     return@launch
                 }
 
-                var serverMessage = "Success"
+                // 1. LƯU TỌA ĐỘ VÀO LOCATION PREFS (Để Service đọc)
+                // Mặc định bán kính là 100m
+                LocationPrefs.saveTargetLocation(context, latitude, longitude, 100f)
+                Log.d("DEBUG_GEO", "Saved location to Prefs")
 
+                // 2. LƯU DANH SÁCH APP BỊ CHẶN VÀO BLOCK MANAGER (Để Service kiểm tra)
+                // Chuyển đổi sang GroupRuleDTO để BlockManager hiểu (giả lập dữ liệu như từ Server trả về)
+                val localRules = selectedApps.map { app ->
+                    GroupRuleDTO(
+                        groupId = "LOCAL_GEO",
+                        packageName = app.packageName,
+                        isBlocked = true,
+                        radius = 100.0, // Quan trọng: Phải có radius > 0 để BlockManager nhận diện là Geo Rule
+                        latitude = latitude,
+                        longitude = longitude
+                    )
+                }
+                // Gọi hàm lưu local
+                BlockManager.saveBlockedPackages(context, localRules)
+
+
+                // 3. GỬI LÊN SERVER (Backup dữ liệu)
+                var serverMessage = "Saved Locally"
                 selectedApps.forEach { app ->
                     val rule = BlockRuleDTO(
                         packageName = app.packageName,
@@ -85,23 +104,14 @@ class GeoBlockViewModel : ViewModel() {
                         radius = 100.0
                     )
 
-                    // SỬA LỖI: Truy cập body() của Response trước khi lấy "message"
                     val response = RetrofitClient.apiService.addBlockRule(rule)
                     if (response.isSuccessful) {
-                        serverMessage = response.body()?.get("message") ?: "Saved"
-                    } else {
-                        Log.e("DEBUG_GEO", "Error code: ${response.code()}")
+                        serverMessage = "Synced to Server"
                     }
                 }
 
-                // Update local state immediately
                 withContext(Dispatchers.Main) {
-                    BlockState.targetLatitude = latitude
-                    BlockState.targetLongitude = longitude
-                    BlockState.targetRadius = 100.0
-                    BlockState.blockedPackages = selectedApps.map { it.packageName }.toSet()
-
-                    Toast.makeText(context, "Server: $serverMessage", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "GeoBlock Active! ($serverMessage)", Toast.LENGTH_LONG).show()
                 }
 
             } catch (e: Exception) {
