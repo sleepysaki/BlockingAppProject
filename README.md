@@ -53,3 +53,41 @@ Learn more about [Kotlin Multiplatform](https://www.jetbrains.com/help/kotlin-mu
 
 We would appreciate your feedback on Compose/Web and Kotlin/Wasm in the public Slack channel [#compose-web](https://slack-chats.kotlinlang.org/c/compose-web).
 If you face any issues, please report them on [YouTrack](https://youtrack.jetbrains.com/newIssue?project=CMP).
+
+
+
+
+---
+
+1. Core Architecture & Frameworks
+Kotlin & Jetpack Compose: Used as the primary programming language and modern UI toolkit for building a reactive, state-driven user interface.
+
+MVVM Architecture (Model-View-ViewModel): Ensures a clean separation of concerns between business logic (ViewModels) and UI components (Composables).
+
+Kotlin Coroutines & Flow: Managed asynchronous tasks, such as background location updates and app list retrieval, ensuring smooth main-thread performance.
+
+2. Advanced Blocking Mechanisms
+Android Accessibility Service: The core engine of the app. It monitors system-level events (TYPE_WINDOW_STATE_CHANGED) to detect which application is moving to the foreground.
+
+Global Action Execution: When a violation (time or location) is detected, the service triggers GLOBAL_ACTION_HOME to immediately minimize the restricted app.
+
+UsageStatsManager: Leveraged to query the system for precise, real-time foreground usage data of any specific package.
+
+3. Geofencing & Location Awareness
+Google Fused Location Provider API: Integrated for high-accuracy location tracking with low power consumption.
+
+Haversine/Spherical Distance Calculation: Utilized Location.distanceBetween to calculate the proximity between the user's current coordinates and the defined "Target Zone".
+
+Real-time Geofencing Logic: Implemented a background callback loop that updates the isInsideTargetZone state every 5 seconds.
+
+4. Data Storage & Persistence Strategy
+SharedPreferences: Used for fast, lightweight persistent storage of user-defined limits (limit_pkg) and schedule timestamps (sched_from/to).
+
+Singleton Pattern (FakeLocalDatabase): Centralized the management of the "Blocked App List" to ensure consistency between the UI settings and the background service.
+
+5. Security & System Integration
+Dynamic Whitelisting: Hardcoded a protection layer to exclude critical system packages (Dialer, Settings, SystemUI) and the app itself from being blocked.
+
+Usage Access & Accessibility Permissions: Implemented high-level system permission requests to allow the app to "read" other app's statuses.
+
+Package Manager Integration: Extracted application metadata (icons and labels) directly from the Android system to populate the control dashboard.
