@@ -11,7 +11,8 @@ import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.face.FaceDetection
 import com.google.mlkit.vision.face.FaceDetectorOptions
 
-class FaceAnalyzer(private val onFaceDetected: (com.google.mlkit.vision.face.Face?, Bitmap?) -> Unit) : ImageAnalysis.Analyzer {
+class FaceAnalyzer(private val onFaceDetected: (com.google.mlkit.vision.face.Face?, Bitmap?, frameWidth: Int, frameHeight: Int) -> Unit
+) : ImageAnalysis.Analyzer {
     private val options = FaceDetectorOptions.Builder()
         .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_FAST)
         .build()
@@ -23,6 +24,9 @@ class FaceAnalyzer(private val onFaceDetected: (com.google.mlkit.vision.face.Fac
         val mediaImage = imageProxy.image
         if (mediaImage != null) {
             val image = InputImage.fromMediaImage(mediaImage, imageProxy.imageInfo.rotationDegrees)
+
+            val frameWidth = image.width
+            val frameHeight = image.height
 
             detector.process(image)
                 .addOnSuccessListener { faces ->
@@ -40,9 +44,9 @@ class FaceAnalyzer(private val onFaceDetected: (com.google.mlkit.vision.face.Fac
                             cropRect.height()
                         )
 
-                        onFaceDetected(face, faceBitmap)
+                        onFaceDetected(face, faceBitmap, frameWidth, frameHeight)
                     } else {
-                        onFaceDetected(null, null)
+                        onFaceDetected(null, null, frameWidth, frameHeight)
                     }
                 }
                 .addOnCompleteListener { imageProxy.close() }
