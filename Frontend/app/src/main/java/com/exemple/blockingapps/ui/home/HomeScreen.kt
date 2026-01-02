@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.exemple.blockingapps.ui.overlay.ExtraTimeRequestOverlay
 
 @RequiresApi(Build.VERSION_CODES.O)
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,6 +38,19 @@ fun HomeScreen(
     onLogout: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var showExtraTimeOverlay by remember { mutableStateOf(false) }
+
+    val requestToShow = uiState.pendingRequests.firstOrNull()
+
+    LaunchedEffect(uiState.pendingRequests, uiState.role) {
+        if (
+            uiState.role.equals("Parent", ignoreCase = true) &&
+            requestToShow != null
+        ) {
+            showExtraTimeOverlay = true
+        }
+    }
+
     val context = LocalContext.current
 
     val realName = remember {
@@ -290,6 +304,16 @@ fun HomeScreen(
             item { Spacer(Modifier.height(24.dp)) }
         }
     }
+    if (showExtraTimeOverlay && requestToShow != null) {
+        ExtraTimeRequestOverlay(
+            request = requestToShow,
+            onClose = {
+                showExtraTimeOverlay = false
+                viewModel.dismissExtraTimeRequest(requestToShow.requestId)
+            }
+        )
+    }
+
 }
 
 private data class FeatureTile(

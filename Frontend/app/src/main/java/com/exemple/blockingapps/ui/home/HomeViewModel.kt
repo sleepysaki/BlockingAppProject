@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Duration
@@ -45,8 +46,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         startAllCountdowns()
         fetchUserGroups(currentUserId)
     }
+    private fun newRequestId(): String = UUID.randomUUID().toString()
 
-    
+
+
 
     fun fetchUserGroups(userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -136,7 +139,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         syncBlockState()
     }
 
-    
+
 
     fun refreshDataFromDisk(context: Context) {
         val prefs = context.getSharedPreferences("blocked_apps_pref", Context.MODE_PRIVATE)
@@ -322,6 +325,37 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         devices = listOf(DeviceItem("DEV-001", "Kid - Pixel 5", "1h ago", false), DeviceItem("DEV-002", "Kid - Galaxy A12", "now", true)),
         groups = emptyList(), isLoading = false
     )
+
+    fun submitExtraTimeRequest(
+        app: BlockedAppItem,
+        requestedMinutes: Int,
+        reason: String,
+        childName: String
+    ) {
+        val request = ExtraTimeRequest(
+            requestId = newRequestId(),
+            appPackage = app.packageName,
+            appName = app.appName,
+            requestedMinutes = requestedMinutes,
+            reason = reason,
+            childName = childName,
+            status = RequestStatus.PENDING
+        )
+
+        _uiState.value = _uiState.value.copy(
+            pendingRequests = _uiState.value.pendingRequests + request
+        )
+    }
+
+    fun dismissExtraTimeRequest(requestId: String) {
+        _uiState.update { state ->
+            state.copy(
+                pendingRequests = state.pendingRequests.filterNot {
+                    it.requestId == requestId
+                }
+            )
+        }
+    }
 
     fun selectDeviceForHistory(deviceId: String) { _uiState.value = _uiState.value.copy(selectedDeviceId = deviceId) }
     fun clearSelectedDevice() { _uiState.value = _uiState.value.copy(selectedDeviceId = null) }
