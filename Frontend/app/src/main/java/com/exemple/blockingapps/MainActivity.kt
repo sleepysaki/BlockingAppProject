@@ -22,22 +22,33 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.rememberNavController
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.exemple.blockingapps.data.common.BlockState
 import com.exemple.blockingapps.data.local.FakeLocalDatabase
 import com.exemple.blockingapps.data.repo.UserRepository
 import com.exemple.blockingapps.di.LocalUserRepository
+import com.exemple.blockingapps.model.GroupRuleDTO
 import com.exemple.blockingapps.model.network.RetrofitClient
 import com.exemple.blockingapps.navigation.AppNavHost
 import com.exemple.blockingapps.ui.home.HomeViewModel
 import com.exemple.blockingapps.ui.theme.BlockingAppsTheme
+import com.exemple.blockingapps.utils.BlockManager
+import com.exemple.blockingapps.worker.SyncRulesWorker
 import com.google.android.gms.location.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.TimeUnit
 
 class MainActivity : ComponentActivity() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
+
+    // Hardcode ID để test (như đã thống nhất), sau này thay bằng ID thật từ Login
+    private val currentUserId = "36050457-f112-4762-a7f7-24daab6986ce"
+
     private val locationPermissionRequest = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
@@ -58,15 +69,20 @@ class MainActivity : ComponentActivity() {
         fusedLocationClient = LocationServices.getFusedLocationProviderClient(this)
         enableEdgeToEdge()
 
+        // Xin quyền (Lưu ý: Hỏi dồn dập thế này UX hơi kém, nhưng OK để test)
         askLocationPermissions()
         askBatteryOptimizationPermission()
         askOverlayPermission()
         askAccessibilityPermission()
 
         val userRepository = UserRepository(FakeLocalDatabase)
-        BlockState.blockedPackages = FakeLocalDatabase.loadBlockedPackages(this)
 
-        fetchRulesFromServer()
+        // 👇 KHỞI ĐỘNG SYNC NGAY LẬP TỨC (Update UI + Service)
+        //fetchRulesFromServer()
+
+        // 👇 KÍCH HOẠT WORKER CHẠY NGẦM (15 phút/lần)
+        //setupPeriodicSyncWorker()
+
         startLocationUpdates()
 
         setContent {
@@ -88,22 +104,47 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    // 👇 CẤU HÌNH WORKER (Phần bạn thiếu)
+    private fun setupPeriodicSyncWorker() {
+        val syncRequest = PeriodicWorkRequestBuilder<SyncRulesWorker>(
+            15, TimeUnit.MINUTES
+        ).build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "SyncRulesWorker",
+            ExistingPeriodicWorkPolicy.KEEP, // Giữ worker cũ nếu đang chạy
+            syncRequest
+        )
+        Log.d("MainActivity", "✅ Background Sync Worker Scheduled")
+    }
+
+    // 👇 CẬP NHẬT LOGIC FETCH ĐỂ KHỚP VỚI GROUP VIEW MODEL
     private fun fetchRulesFromServer() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                val rules = RetrofitClient.api.getBlockRules()
-                val serverBlockedList = rules.filter { it.isBlocked }.map { it.packageName }.toSet()
-                val firstRule = rules.firstOrNull()
+                // 1. Lấy danh sách nhóm của user
+                val groupsResponse = RetrofitClient.apiService.getUserGroups(currentUserId)
+                val allRules = mutableListOf<GroupRuleDTO>()
+
+                if (groupsResponse.isSuccessful) {
+                    val groups = groupsResponse.body() ?: emptyList()
+                    // 2. Lấy luật của từng nhóm
+                    for (group in groups) {
+                        val rulesResponse = RetrofitClient.apiService.getGroupRules(group.groupId)
+                        if (rulesResponse.isSuccessful) {
+                            allRules.addAll(rulesResponse.body() ?: emptyList())
+                        }
+                    }
+                }
 
                 withContext(Dispatchers.Main) {
-                    BlockState.blockedPackages = serverBlockedList
+                    // 3. QUAN TRỌNG: Lưu vào BlockManager để AccessibilityService đọc được
+                    BlockManager.saveBlockedPackages(this@MainActivity, allRules)
 
-                    if (firstRule != null) {
-                        BlockState.targetLatitude = firstRule.latitude ?: 0.0
-                        BlockState.targetLongitude = firstRule.longitude ?: 0.0
-                        BlockState.targetRadius = firstRule.radius ?: 100.0
-                    }
-                    Log.i("API_SYNC", "Synced ${serverBlockedList.size} rules")
+                    // (Tùy chọn) Cập nhật BlockState cũ nếu code UI cũ vẫn dùng
+                    BlockState.blockedPackages = allRules.filter { it.isBlocked }.map { it.packageName }.toSet()
+
+                    Log.i("API_SYNC", "Manual Sync: Loaded ${allRules.size} rules")
                 }
             } catch (e: Exception) {
                 Log.e("API_SYNC", "Failed to fetch rules: ${e.message}")
@@ -113,27 +154,21 @@ class MainActivity : ComponentActivity() {
 
     @SuppressLint("MissingPermission")
     private fun startLocationUpdates() {
-        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 2000).build()
+        // Chỉ chạy update UI, logic chặn chính nằm ở Service
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000).build()
 
-        fusedLocationClient.requestLocationUpdates(locationRequest, object : LocationCallback() {
-            override fun onLocationResult(locationResult: LocationResult) {
-                val location = locationResult.lastLocation ?: return
-
-                if (BlockState.targetLatitude != 0.0) {
-                    val results = FloatArray(1)
-                    android.location.Location.distanceBetween(
-                        location.latitude,
-                        location.longitude,
-                        BlockState.targetLatitude,
-                        BlockState.targetLongitude,
-                        results
-                    )
-                    BlockState.isInStudyZone = results[0] <= BlockState.targetRadius
+        try {
+            fusedLocationClient.requestLocationUpdates(locationRequest, object : LocationCallback() {
+                override fun onLocationResult(locationResult: LocationResult) {
+                    // Logic update UI nếu cần
                 }
-            }
-        }, Looper.getMainLooper())
+            }, Looper.getMainLooper())
+        } catch (e: Exception) {
+            Log.e("Location", "Error starting updates: ${e.message}")
+        }
     }
 
+    // --- CÁC HÀM XIN QUYỀN GIỮ NGUYÊN ---
     private fun askLocationPermissions() {
         locationPermissionRequest.launch(arrayOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -145,6 +180,7 @@ class MainActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val hasBackgroundLocation = checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
             if (!hasBackgroundLocation) {
+                // Mở setting app để user tự bật
                 val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                     data = Uri.parse("package:$packageName")
                 }

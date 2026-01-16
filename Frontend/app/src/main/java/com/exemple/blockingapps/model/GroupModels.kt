@@ -1,5 +1,7 @@
 package com.exemple.blockingapps.model
 
+import com.google.gson.annotations.SerializedName
+
 data class CreateGroupRequest(
     val name: String,
     val adminId: String
@@ -44,13 +46,26 @@ data class RemoveMemberRequest(
     val adminId: String,
     val targetUserId: String
 )
+
+// 👇 SỬA LẠI CLASS NÀY
 data class GroupRuleDTO(
+    val id: String? = null,
     val groupId: String,
     val packageName: String,
+
+    @SerializedName("isBlocked")
     val isBlocked: Boolean,
+
     val startTime: String? = null,
     val endTime: String? = null,
+
+    // 👇 THÊM SERIALIZED NAME ĐỂ BẮT MỌI TRƯỜNG HỢP TÊN BIẾN TỪ SERVER
+    @SerializedName(value = "latitude", alternate = ["lat", "Lat"])
     val latitude: Double? = null,
+
+    @SerializedName(value = "longitude", alternate = ["long", "lng", "Long", "Lng"])
     val longitude: Double? = null,
+
+    @SerializedName(value = "radius", alternate = ["rad"])
     val radius: Double? = null
 )

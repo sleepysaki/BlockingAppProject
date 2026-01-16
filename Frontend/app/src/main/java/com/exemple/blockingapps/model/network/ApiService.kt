@@ -32,18 +32,14 @@ interface ApiService {
     suspend fun getUserGroups(@Path("id") userId: String): Response<List<GroupDTO>>
 
 
-
-
+    @POST("groups/rules")
+    suspend fun saveGroupRule(@Body rule: GroupRuleDTO): Response<Void>
 
     @POST("groups/create")
     suspend fun createGroup(@Body request: CreateGroupRequest): Response<CreateGroupResponse>
 
     @POST("groups/join")
-    suspend fun joinGroup(
-        @Query("user_id") userId: String,
-        @Body inviteCode: String
-    ): Response<Map<String, String>>
-
+    suspend fun joinGroup(@Body request: JoinGroupRequest): Response<Map<String, String>>
 
     @GET("api/groups/{id}/rules")
     suspend fun getGroupRules(@Path("id") groupId: String): Response<List<GroupRuleDTO>>
@@ -62,6 +58,9 @@ interface ApiService {
 
     @POST("rules")
     suspend fun addBlockRule(@Body rule: BlockRuleDTO): Response<Map<String, String>>
+
+    @POST("groups/promote")
+    suspend fun promoteMember(@Body request: PromoteMemberRequest): Response<Map<String, String>>
 }
 
 object RetrofitClient {

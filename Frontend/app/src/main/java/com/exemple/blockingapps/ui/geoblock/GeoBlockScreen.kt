@@ -14,6 +14,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.exemple.blockingapps.data.local.SessionManager // 👈 Nhớ import SessionManager
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
 import com.google.maps.android.compose.*
@@ -21,12 +22,16 @@ import com.google.maps.android.compose.*
 @Composable
 fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
     val context = LocalContext.current
-    // Collect the app list from ViewModel
+
+    // 1. Collect dữ liệu từ ViewModel
     val apps by viewModel.appList.collectAsState()
+    val userGroups by viewModel.userGroups.collectAsState() // 👇 Lấy danh sách nhóm
+
+    // 2. Lấy User ID hiện tại để tải nhóm
+    val currentUserId = remember { SessionManager.getUserId(context) }
 
     var selectedLocation by remember { mutableStateOf<LatLng?>(null) }
 
-    // Default camera position (Hanoi)
     val cameraPositionState = rememberCameraPositionState {
         position = CameraPosition.fromLatLngZoom(LatLng(21.0285, 105.8542), 15f)
     }
@@ -34,13 +39,16 @@ fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
     val uiSettings by remember { mutableStateOf(MapUiSettings(myLocationButtonEnabled = true)) }
     val properties by remember { mutableStateOf(MapProperties(isMyLocationEnabled = true)) }
 
-    // Load installed apps when screen opens
+    // 3. Khởi chạy: Tải App và Tải Nhóm
     LaunchedEffect(Unit) {
         viewModel.getInstalledApps(context)
+        if (!currentUserId.isNullOrEmpty()) {
+            viewModel.fetchUserGroups(currentUserId) // 👇 Gọi API lấy nhóm
+        }
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        // --- MAP SECTION (Weight 0.4) ---
+        // --- MAP SECTION ---
         Box(modifier = Modifier.weight(0.4f)) {
             GoogleMap(
                 modifier = Modifier.fillMaxSize(),
@@ -61,7 +69,7 @@ fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
             }
         }
 
-        // --- CONTROL PANEL SECTION (Weight 0.6) ---
+        // --- CONTROL PANEL SECTION ---
         Card(
             modifier = Modifier
                 .weight(0.6f)
@@ -127,22 +135,35 @@ fun GeoBlockScreen(viewModel: GeoBlockViewModel = viewModel()) {
                 // --- UPDATED BUTTON LOGIC ---
                 Button(
                     onClick = {
-                        // 1. Validation Logic
+                        // A. Validation cơ bản
                         if (selectedLocation == null) {
                             Toast.makeText(context, "❌ Please select a location on the map!", Toast.LENGTH_SHORT).show()
                         } else if (!apps.any { it.isSelected }) {
                             Toast.makeText(context, "❌ Please select at least one app!", Toast.LENGTH_SHORT).show()
                         } else {
-                            // 2. Call ViewModel to send data to Server
-                            selectedLocation?.let { loc ->
-                                viewModel.activateBlocking(context, loc.latitude, loc.longitude)
+                            // B. Lấy Group ID (Logic: Lấy nhóm đầu tiên tìm thấy)
+                            // Nếu bạn muốn user chọn nhóm, bạn cần thêm DropdownMenu ở UI.
+                            // Ở đây mình lấy mặc định nhóm đầu tiên cho nhanh.
+                            val targetGroup = userGroups.firstOrNull()
+
+                            if (targetGroup != null) {
+                                // ✅ GỌI HÀM VỚI ID NHÓM
+                                selectedLocation?.let { loc ->
+                                    viewModel.activateBlocking(
+                                        context,
+                                        loc.latitude,
+                                        loc.longitude,
+                                        targetGroup.groupId // Truyền ID vào đây
+                                    )
+                                }
+                            } else {
+                                Toast.makeText(context, "⚠️ No Family Group found! Create a group first.", Toast.LENGTH_LONG).show()
                             }
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 8.dp),
-                    // Keep enabled so user can click and see error Toast if missing info
                     enabled = true
                 ) {
                     Text("ACTIVATE GEO-BLOCK (SERVER)")

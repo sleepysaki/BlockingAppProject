@@ -1,15 +1,16 @@
 package com.exemple.blockingapps.ui.group
 
 import android.content.Context
-import android.content.pm.PackageManager 
+import android.content.pm.PackageManager
 import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.exemple.blockingapps.data.model.AppItem 
+import com.exemple.blockingapps.data.model.AppItem
 import com.exemple.blockingapps.model.CreateGroupRequest
 import com.exemple.blockingapps.model.GroupMember
 import com.exemple.blockingapps.model.GroupRuleDTO
+import com.exemple.blockingapps.model.JoinGroupRequest
 import com.exemple.blockingapps.model.LeaveGroupRequest
 import com.exemple.blockingapps.model.RemoveMemberRequest
 import com.exemple.blockingapps.model.UserGroup
@@ -34,7 +35,6 @@ class GroupViewModel : ViewModel() {
     private val _groupRules = MutableStateFlow<List<GroupRuleDTO>>(emptyList())
     val groupRules = _groupRules.asStateFlow()
 
-    
     private val _installedApps = MutableStateFlow<List<AppItem>>(emptyList())
     val installedApps = _installedApps.asStateFlow()
 
@@ -66,11 +66,7 @@ class GroupViewModel : ViewModel() {
     fun createGroup(context: Context, groupName: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val request = CreateGroupRequest(
-                    name = groupName,
-                    adminId = userId
-                )
-
+                val request = CreateGroupRequest(name = groupName, adminId = userId)
                 val response = RetrofitClient.apiService.createGroup(request)
 
                 withContext(Dispatchers.Main) {
@@ -80,16 +76,11 @@ class GroupViewModel : ViewModel() {
                         Toast.makeText(context, "Group Created! Code: ${data?.joinCode}", Toast.LENGTH_LONG).show()
                         fetchMyGroups(userId)
                     } else {
-                        val errorMsg = response.errorBody()?.string()
-                        Log.e("GroupVM", "Create Fail: $errorMsg")
                         Toast.makeText(context, "Failed: ${response.code()}", Toast.LENGTH_SHORT).show()
                     }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                }
+                withContext(Dispatchers.Main) { Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show() }
             }
         }
     }
@@ -97,18 +88,21 @@ class GroupViewModel : ViewModel() {
     fun joinGroup(context: Context, joinCode: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val response = RetrofitClient.apiService.joinGroup(userId, joinCode)
+                val request = JoinGroupRequest(joinCode = joinCode, userId = userId)
+                val response = RetrofitClient.apiService.joinGroup(request)
+
                 withContext(Dispatchers.Main) {
                     val body = response.body()
                     if (response.isSuccessful && body?.get("status") == "success") {
                         Toast.makeText(context, "Joined Successfully!", Toast.LENGTH_SHORT).show()
                         fetchMyGroups(userId)
                     } else {
-                        val msg = body?.get("message") ?: "Error ${response.code()}"
-                        Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, body?.get("message") ?: "Error", Toast.LENGTH_SHORT).show()
                     }
                 }
-            } catch (e: Exception) { e.printStackTrace() }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) { Toast.makeText(context, "Connection Error", Toast.LENGTH_SHORT).show() }
+            }
         }
     }
 
@@ -119,9 +113,29 @@ class GroupViewModel : ViewModel() {
                 if (response.isSuccessful) {
                     _members.value = response.body() ?: emptyList()
                 }
-            } catch (e: Exception) {
-                Log.e("GroupVM", "Error fetching members", e)
-            }
+            } catch (e: Exception) { Log.e("GroupVM", "Error fetching members", e) }
+        }
+    }
+
+    fun promoteMember(context: Context, groupId: String, currentUserId: String, targetUserId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val request = com.exemple.blockingapps.model.PromoteMemberRequest(
+                    groupId = groupId,
+                    adminId = currentUserId,
+                    targetUserId = targetUserId
+                )
+                val response = RetrofitClient.apiService.promoteMember(request)
+
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        Toast.makeText(context, "Promoted successfully", Toast.LENGTH_SHORT).show()
+                        fetchMembers(groupId)
+                    } else {
+                        Toast.makeText(context, "Failed to promote", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
@@ -130,21 +144,14 @@ class GroupViewModel : ViewModel() {
             try {
                 val req = LeaveGroupRequest(groupId, userId)
                 val res = RetrofitClient.apiService.leaveGroup(req)
-                val body = res.body()
                 withContext(Dispatchers.Main) {
-                    if (res.isSuccessful && body?.get("status") == "success") {
-                        Toast.makeText(context, "Left group successfully", Toast.LENGTH_SHORT).show()
+                    if (res.isSuccessful) {
+                        Toast.makeText(context, "Left group", Toast.LENGTH_SHORT).show()
                         onSuccess()
                         fetchMyGroups(userId)
-                    } else {
-                        val errorMsg = body?.get("error") ?: body?.get("message") ?: "Unknown error"
-                        Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_SHORT).show()
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) { Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show() }
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
@@ -153,20 +160,13 @@ class GroupViewModel : ViewModel() {
             try {
                 val req = RemoveMemberRequest(groupId, adminId, targetUserId)
                 val res = RetrofitClient.apiService.removeMember(req)
-                val body = res.body()
                 withContext(Dispatchers.Main) {
-                    if (res.isSuccessful && body?.get("status") == "success") {
+                    if (res.isSuccessful) {
                         Toast.makeText(context, "Member removed", Toast.LENGTH_SHORT).show()
                         fetchMembers(groupId)
-                    } else {
-                        val errorMsg = body?.get("error") ?: body?.get("message") ?: "Unknown error"
-                        Toast.makeText(context, "Failed: $errorMsg", Toast.LENGTH_SHORT).show()
                     }
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-                withContext(Dispatchers.Main) { Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show() }
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
@@ -178,23 +178,17 @@ class GroupViewModel : ViewModel() {
                     val rules = response.body() ?: emptyList()
                     _groupRules.value = rules
                     com.exemple.blockingapps.utils.BlockManager.saveBlockedPackages(context, rules)
-
-                    Log.d("GroupVM", "Rules synced to BlockManager: ${rules.size} items")
                 }
-            } catch (e: Exception) {
-                e.printStackTrace()
-            }
+            } catch (e: Exception) { e.printStackTrace() }
         }
     }
 
-    
+    // --- HÀM THÊM RULE NHANH (Cũ - Có thể xóa nếu không dùng) ---
     fun addGroupRule(context: Context, groupId: String, app: AppItem) {
-        
-        
-        updateGroupRule(context, groupId, app.packageName, isBlocked = true)
+        // Mặc định thêm rule chặn vĩnh viễn nếu gọi hàm này
+        updateGroupRule(context, groupId, app.packageName, true, null, null)
     }
 
-    
     fun loadInstalledApps(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             val pm = context.packageManager
@@ -208,55 +202,58 @@ class GroupViewModel : ViewModel() {
                         icon = info.loadIcon(pm),
                         isSelected = false
                     )
-                } else {
-                    null
-                }
+                } else { null }
             }.filter { it.packageName != context.packageName }
                 .sortedBy { it.name }
-
             _installedApps.value = apps
         }
     }
 
-    fun updateGroupRule(context: Context, groupId: String, packageName: String, isBlocked: Boolean) {
+    // --- UPDATED: HÀM CẬP NHẬT RULE (HỖ TRỢ THỜI GIAN) ---
+    fun updateGroupRule(
+        context: Context,
+        groupId: String,
+        packageName: String,
+        isBlocked: Boolean,
+        startTime: String? = null,
+        endTime: String? = null
+    ) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                
                 val currentList = _groupRules.value
                 val existingRule = currentList.find { it.packageName == packageName }
 
-                
-                val ruleToSend = existingRule?.copy(isBlocked = isBlocked)
-                    ?: GroupRuleDTO(
-                        groupId = groupId,
-                        packageName = packageName,
-                        isBlocked = isBlocked
-                    )
+                // Copy hoặc tạo mới rule
+                val ruleToSend = existingRule?.copy(
+                    isBlocked = isBlocked,
+                    startTime = startTime,
+                    endTime = endTime
+                ) ?: GroupRuleDTO(
+                    groupId = groupId,
+                    packageName = packageName,
+                    isBlocked = isBlocked,
+                    startTime = startTime,
+                    endTime = endTime
+                )
 
-                Log.d("GroupVM", "Updating Rule: $ruleToSend")
+                Log.d("GroupVM", "Sending Rule: $ruleToSend")
 
-                
                 val res = RetrofitClient.apiService.updateGroupRule(ruleToSend)
 
                 withContext(Dispatchers.Main) {
-                    
                     if (res.isSuccessful) {
-                        Log.d("GroupVM", "Update success, reloading list...")
-                        fetchGroupRules(context, groupId)
+                        Toast.makeText(context, if(isBlocked) "Rule Saved!" else "App Unblocked!", Toast.LENGTH_SHORT).show()
+                        fetchGroupRules(context, groupId) // Refresh list
                     } else {
-                        
-                        val errorMsg = res.errorBody()?.string() ?: "Unknown error"
                         Toast.makeText(context, "Failed: ${res.code()}", Toast.LENGTH_SHORT).show()
-
-                        
-                        fetchGroupRules(context, groupId)
+                        fetchGroupRules(context, groupId) // Refresh to reset state
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
                     Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
-                    fetchGroupRules(context, groupId) 
+                    fetchGroupRules(context, groupId)
                 }
             }
         }

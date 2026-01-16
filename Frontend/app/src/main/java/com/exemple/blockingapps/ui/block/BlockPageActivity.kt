@@ -3,6 +3,7 @@ package com.exemple.blockingapps.ui.block
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -19,12 +20,22 @@ import androidx.compose.ui.unit.sp
 class BlockPageActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        // 👇 1. LẤY LÝ DO TỪ INTENT (Nếu null thì dùng câu mặc định)
+        val reason = intent.getStringExtra("BLOCK_REASON")
+            ?: "This application is currently blocked by your Focus Schedule."
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                goHome()
+            }
+        })
+
         setContent {
-            // Sử dụng Theme của app để đồng bộ màu sắc
             MaterialTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    color = Color(0xFFFFEBEE) // Màu nền đỏ nhạt
+                    color = Color(0xFFFFEBEE)
                 ) {
                     Column(
                         modifier = Modifier
@@ -33,7 +44,6 @@ class BlockPageActivity : ComponentActivity() {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
-                        // Biểu tượng Khóa
                         Icon(
                             imageVector = Icons.Default.Lock,
                             contentDescription = "Blocked Icon",
@@ -43,7 +53,6 @@ class BlockPageActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.height(32.dp))
 
-                        // Tiêu đề thông báo
                         Text(
                             text = "Access Restricted",
                             fontSize = 28.sp,
@@ -54,9 +63,9 @@ class BlockPageActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // Nội dung chi tiết
+                        // 👇 2. HIỂN THỊ LÝ DO CỤ THỂ
                         Text(
-                            text = "This application is currently blocked by your Focus Schedule.\nStay focused on your goals!",
+                            text = reason, // Hiển thị lý do nhận được
                             fontSize = 18.sp,
                             color = Color.Black,
                             textAlign = TextAlign.Center,
@@ -65,16 +74,9 @@ class BlockPageActivity : ComponentActivity() {
 
                         Spacer(modifier = Modifier.height(60.dp))
 
-                        // Nút quay lại màn hình chính
                         Button(
                             onClick = {
-                                // Thoát về màn hình Home của điện thoại
-                                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
-                                    addCategory(Intent.CATEGORY_HOME)
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                                }
-                                startActivity(homeIntent)
-                                finish()
+                                goHome()
                             },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color(0xFFD32F2F)
@@ -93,5 +95,14 @@ class BlockPageActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun goHome() {
+        val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+            addCategory(Intent.CATEGORY_HOME)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        }
+        startActivity(homeIntent)
+        finish()
     }
 }

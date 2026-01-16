@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,13 +15,16 @@ import com.exemple.blockingapps.data.network.RetrofitClient
 import com.exemple.blockingapps.data.repo.AppRepository
 import com.exemple.blockingapps.data.repository.UsageDataProvider
 import com.exemple.blockingapps.model.CreateGroupRequest
+import com.exemple.blockingapps.model.GroupMember
 import com.exemple.blockingapps.model.GroupRuleDTO
+import com.exemple.blockingapps.model.RemoveMemberRequest
 import com.exemple.blockingapps.utils.BlockManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.time.Duration
@@ -33,12 +37,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<HomeUiState> = _uiState
 
+    // 👇 STATE MỚI: Quản lý danh sách thành viên
+    private val _groupMembers = MutableStateFlow<List<GroupMember>>(emptyList())
+    val groupMembers: StateFlow<List<GroupMember>> = _groupMembers.asStateFlow()
+
     private val repository = AppRepository(application.applicationContext)
     private val countdownJobs = mutableMapOf<String, Job>()
     private val appEndTimes = mutableMapOf<String, Instant>()
     private var instantLockJob: Job? = null
     private val INSTANT_LOCK_DURATION_SECONDS = 3600L
 
+    // ID Mặc định (Có thể thay thế bằng logic lấy từ UserPreferences thực tế)
     private val currentUserId = "36050457-f112-4762-a7f7-24daab6986ce"
     private val currentDeviceId = "DEV-001"
 
@@ -47,7 +56,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         fetchUserGroups(currentUserId)
     }
 
-
+    // --- GROUP LOGIC ---
 
     fun fetchUserGroups(userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -68,28 +77,98 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun createGroup(groupName: String) {
+    // 👇 CẬP NHẬT: Thêm Context và UserId để hiển thị Toast và đúng logic UI
+    fun createGroup(context: Context, groupName: String, userId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                // SỬA ĐOẠN NÀY
                 val request = CreateGroupRequest(
                     name = groupName,
-                    adminId = currentUserId
+                    adminId = userId
                 )
-
                 val response = RetrofitClient.apiService.createGroup(request)
 
-                if (response.isSuccessful) {
-                    Log.d("HomeViewModel", "Group created successfully")
-                    fetchUserGroups(currentUserId)
-                } else {
-                    Log.e("HomeViewModel", "Failed to create: ${response.code()}")
+                withContext(Dispatchers.Main) {
+                    if (response.isSuccessful) {
+                        Toast.makeText(context, "Group Created!", Toast.LENGTH_SHORT).show()
+                        fetchUserGroups(userId) // Reload list
+                    } else {
+                        Toast.makeText(context, "Failed: ${response.code()}", Toast.LENGTH_SHORT).show()
+                    }
                 }
             } catch (e: Exception) {
-                Log.e("HomeViewModel", "Error creating group: ${e.message}")
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
             }
         }
     }
+
+    // 👇 MỚI: Lấy danh sách thành viên của Group
+    fun fetchGroupMembers(groupId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitClient.apiService.getGroupMembers(groupId)
+                if (response.isSuccessful) {
+                    val members = response.body() ?: emptyList()
+                    withContext(Dispatchers.Main) {
+                        _groupMembers.value = members
+                    }
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
+    // 👇 MỚI: Thăng chức thành viên (Promote to Admin)
+    fun promoteMember(context: Context, groupId: String, adminId: String, targetUserId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                // SỬA Ở ĐÂY: Dùng đúng PromoteMemberRequest
+                val req = com.exemple.blockingapps.model.PromoteMemberRequest(groupId, adminId, targetUserId)
+
+                // Bây giờ gọi hàm này sẽ không bị lỗi Type Mismatch nữa
+                val res = RetrofitClient.apiService.promoteMember(req)
+
+                withContext(Dispatchers.Main) {
+                    if (res.isSuccessful && res.body()?.get("status") == "success") {
+                        Toast.makeText(context, "Promoted to Admin!", Toast.LENGTH_SHORT).show()
+                        fetchGroupMembers(groupId)
+                    } else {
+                        Toast.makeText(context, "Failed to promote", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // 👇 MỚI: Xóa thành viên (Kick Member)
+    fun removeMember(context: Context, groupId: String, adminId: String, targetUserId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val req = RemoveMemberRequest(groupId, adminId, targetUserId)
+                val res = RetrofitClient.apiService.removeMember(req)
+                withContext(Dispatchers.Main) {
+                    if (res.isSuccessful && res.body()?.get("status") == "success") {
+                        Toast.makeText(context, "Member removed", Toast.LENGTH_SHORT).show()
+                        fetchGroupMembers(groupId) // Reload danh sách thành viên
+                    } else {
+                        Toast.makeText(context, "Failed to remove", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "Error: ${e.message}", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    // --- SYNC & LOGIC CŨ ---
 
     fun syncData() {
         viewModelScope.launch {
@@ -115,13 +194,29 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 if (responseGroups.isSuccessful) {
                     val groups = responseGroups.body() ?: emptyList()
                     val allRules = mutableListOf<GroupRuleDTO>()
+
                     groups.forEach { group ->
                         val responseRules = RetrofitClient.apiService.getGroupRules(group.groupId)
                         if (responseRules.isSuccessful) {
-                            allRules.addAll(responseRules.body() ?: emptyList())
+                            val rules = responseRules.body() ?: emptyList()
+
+                            // 👇 ĐOẠN CODE DEBUG MỚI THÊM VÀO ĐÂY
+                            // Giúp kiểm tra xem Server trả về tọa độ hay là Null
+                            rules.forEach { r ->
+                                if (r.latitude != null && (r.radius ?: 0.0) > 0.0) {
+                                    Log.d("DEBUG_SYNC", "✅ SERVER CÓ DATA: ${r.packageName} -> Lat: ${r.latitude}, Long: ${r.longitude}, R: ${r.radius}")
+                                } else {
+                                    Log.d("DEBUG_SYNC", "⚠️ SERVER TRẢ VỀ NULL HOẶC RỖNG: ${r.packageName} -> Lat: ${r.latitude}, R: ${r.radius}")
+                                }
+                            }
+                            // 👆 HẾT ĐOẠN DEBUG
+
+                            allRules.addAll(rules)
                         }
                     }
+
                     withContext(Dispatchers.Main) {
+                        // Cập nhật vào BlockManager (Lúc này nếu allRules có tọa độ thì Geo Block sẽ hoạt động)
                         BlockManager.updateRules(context, allRules)
                         updateBlockedAppsUI(allRules)
                     }
@@ -146,8 +241,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.value = _uiState.value.copy(blockedApps = blockedItems)
         syncBlockState()
     }
-
-
 
     fun refreshDataFromDisk(context: Context) {
         val prefs = context.getSharedPreferences("blocked_apps_pref", Context.MODE_PRIVATE)
@@ -189,7 +282,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val updatedList = _uiState.value.blockedApps.filterNot { it.packageName == packageName }
         _uiState.value = _uiState.value.copy(blockedApps = updatedList)
 
-
         val rulesToSave = updatedList.map { item ->
             com.exemple.blockingapps.model.BlockRule(
                 packageName = item.packageName,
@@ -203,8 +295,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         syncBlockState()
     }
 
-
-
     fun addDevice(deviceName: String, deviceId: String) {
         val newDevice = DeviceItem(deviceId = deviceId, deviceName = deviceName, lastActive = "now", isConnected = true)
         _uiState.value = _uiState.value.copy(devices = _uiState.value.devices + newDevice)
@@ -213,8 +303,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun removeDevice(deviceId: String) {
         _uiState.value = _uiState.value.copy(devices = _uiState.value.devices.filterNot { it.deviceId == deviceId })
     }
-
-
 
     fun loadRealUsageAndGenerateRecs(context: Context) {
         viewModelScope.launch {
@@ -256,8 +344,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         syncBlockState()
     }
 
-
-
     fun lockAllNow() {
         instantLockJob?.cancel()
         BlockState.setInstantLockTime(INSTANT_LOCK_DURATION_SECONDS)
@@ -284,7 +370,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val currentList = _uiState.value.blockedApps.filterNot { it.packageName == app.packageName }.toMutableList()
         currentList.add(newItem)
         _uiState.value = _uiState.value.copy(blockedApps = currentList)
-
 
         val rulesToSave = currentList.map { item ->
             com.exemple.blockingapps.model.BlockRule(

@@ -1,6 +1,5 @@
 package com.exemple.blockingapps.ui.geoblock
 
-import BlockRuleDTO
 import android.content.Context
 import android.content.pm.PackageManager
 import android.util.Log
@@ -8,6 +7,7 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.exemple.blockingapps.data.model.AppItem
+import com.exemple.blockingapps.model.GroupDTO // 👈 Import GroupDTO
 import com.exemple.blockingapps.model.GroupRuleDTO
 import com.exemple.blockingapps.model.network.RetrofitClient
 import com.exemple.blockingapps.utils.BlockManager
@@ -22,6 +22,26 @@ import kotlinx.coroutines.withContext
 class GeoBlockViewModel : ViewModel() {
     private val _appList = MutableStateFlow<List<AppItem>>(emptyList())
     val appList = _appList.asStateFlow()
+
+    // 👇 1. State lưu danh sách nhóm
+    private val _userGroups = MutableStateFlow<List<GroupDTO>>(emptyList())
+    val userGroups = _userGroups.asStateFlow()
+
+    // 👇 2. Hàm tải danh sách nhóm (Gọi từ Screen)
+    fun fetchUserGroups(userId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val response = RetrofitClient.apiService.getUserGroups(userId)
+                if (response.isSuccessful) {
+                    val groups = response.body() ?: emptyList()
+                    _userGroups.value = groups
+                    Log.d("DEBUG_GEO", "Fetched ${groups.size} groups")
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     fun getInstalledApps(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
@@ -55,8 +75,9 @@ class GeoBlockViewModel : ViewModel() {
         }
     }
 
-    fun activateBlocking(context: Context, latitude: Double, longitude: Double) {
-        Log.d("DEBUG_GEO", "ViewModel received: Lat=$latitude, Long=$longitude")
+    // 👇 3. Hàm kích hoạt chặn (Nhận GroupID từ UI)
+    fun activateBlocking(context: Context, latitude: Double, longitude: Double, currentGroupId: String) {
+        Log.d("DEBUG_GEO", "ViewModel received: Lat=$latitude, Long=$longitude, GroupID=$currentGroupId")
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -69,49 +90,49 @@ class GeoBlockViewModel : ViewModel() {
                     return@launch
                 }
 
-                // 1. LƯU TỌA ĐỘ VÀO LOCATION PREFS (Để Service đọc)
-                // Mặc định bán kính là 100m
-                LocationPrefs.saveTargetLocation(context, latitude, longitude, 100f)
-                Log.d("DEBUG_GEO", "Saved location to Prefs")
+                // A. LƯU LOCAL (Để chặn ngay lập tức)
+                LocationPrefs.saveTargetLocation(context, latitude, longitude, 100.0)
 
-                // 2. LƯU DANH SÁCH APP BỊ CHẶN VÀO BLOCK MANAGER (Để Service kiểm tra)
-                // Chuyển đổi sang GroupRuleDTO để BlockManager hiểu (giả lập dữ liệu như từ Server trả về)
                 val localRules = selectedApps.map { app ->
                     GroupRuleDTO(
-                        groupId = "LOCAL_GEO",
+                        groupId = currentGroupId,
                         packageName = app.packageName,
                         isBlocked = true,
-                        radius = 100.0, // Quan trọng: Phải có radius > 0 để BlockManager nhận diện là Geo Rule
+                        radius = 100.0,
                         latitude = latitude,
                         longitude = longitude
                     )
                 }
-                // Gọi hàm lưu local
                 BlockManager.saveBlockedPackages(context, localRules)
 
-
-                // 3. GỬI LÊN SERVER (Backup dữ liệu)
-                var serverMessage = "Saved Locally"
+                // B. GỬI LÊN SERVER (Vào bảng GroupRules)
+                var successCount = 0
                 selectedApps.forEach { app ->
-                    val rule = BlockRuleDTO(
+                    val groupRule = GroupRuleDTO(
+                        groupId = currentGroupId,
                         packageName = app.packageName,
                         isBlocked = true,
-                        limitMinutes = 0,
                         startTime = null,
                         endTime = null,
-                        latitude = latitude,
-                        longitude = longitude,
-                        radius = 100.0
+                        latitude = latitude,   // ✅ Có tọa độ
+                        longitude = longitude, // ✅ Có tọa độ
+                        radius = 100.0         // ✅ Có bán kính
                     )
 
-                    val response = RetrofitClient.apiService.addBlockRule(rule)
+                    val response = RetrofitClient.apiService.saveGroupRule(groupRule)
                     if (response.isSuccessful) {
-                        serverMessage = "Synced to Server"
+                        successCount++
+                    } else {
+                        Log.e("DEBUG_GEO", "Failed to save ${app.name}: ${response.code()}")
                     }
                 }
 
                 withContext(Dispatchers.Main) {
-                    Toast.makeText(context, "GeoBlock Active! ($serverMessage)", Toast.LENGTH_LONG).show()
+                    if (successCount > 0) {
+                        Toast.makeText(context, "GeoBlock Active! (Synced $successCount apps)", Toast.LENGTH_LONG).show()
+                    } else {
+                        Toast.makeText(context, "Saved Locally only (Server Sync Failed)", Toast.LENGTH_LONG).show()
+                    }
                 }
 
             } catch (e: Exception) {

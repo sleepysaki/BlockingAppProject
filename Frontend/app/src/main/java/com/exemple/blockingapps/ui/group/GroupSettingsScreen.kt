@@ -9,18 +9,15 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ContentCopy // Icon copy
-import androidx.compose.material.icons.filled.Share // Icon share
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalClipboardManager // Để copy
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.drawable.toBitmap
@@ -37,12 +34,20 @@ fun GroupSettingsScreen(
 ) {
     val rules by viewModel.groupRules.collectAsState()
     val installedApps by viewModel.installedApps.collectAsState()
-    val context = LocalContext.current
-    val clipboardManager = LocalClipboardManager.current // Quản lý clipboard
+    val myGroups by viewModel.myGroups.collectAsState() // 👇 Lấy danh sách nhóm để check quyền
 
-    // Lấy Join Code từ ViewModel
-    // Lưu ý: Đảm bảo ViewModel đã load danh sách nhóm để có thể tìm thấy code
-    val joinCode = remember(groupId) { viewModel.getJoinCodeForGroup(groupId) }
+    val context = LocalContext.current
+    val clipboardManager = LocalClipboardManager.current
+
+    // 👇 Logic xác định quyền ADMIN
+    // Tìm nhóm hiện tại trong danh sách để lấy Role
+    val currentGroup = remember(myGroups, groupId) {
+        myGroups.find { it.groupId == groupId }
+    }
+    val isAdmin = currentGroup?.role == "ADMIN"
+
+    // Lấy Join Code
+    val joinCode = remember(currentGroup) { currentGroup?.joinCode ?: "N/A" }
 
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -54,7 +59,7 @@ fun GroupSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings & Invite") }, // Đổi tiêu đề chút cho hợp
+                title = { Text(if (isAdmin) "Settings & Invite" else "Group Rules (View Only)") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -62,9 +67,12 @@ fun GroupSettingsScreen(
                 }
             )
         },
+        // 👇 Chỉ hiện nút Thêm (+) nếu là ADMIN
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAddDialog = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Add Rule")
+            if (isAdmin) {
+                FloatingActionButton(onClick = { showAddDialog = true }) {
+                    Icon(Icons.Default.Add, contentDescription = "Add Rule")
+                }
             }
         }
     ) { padding ->
@@ -74,48 +82,51 @@ fun GroupSettingsScreen(
                 .fillMaxSize()
                 .padding(16.dp)
         ) {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 16.dp)
-                    .clickable {
-                        clipboardManager.setText(AnnotatedString(joinCode))
-                        Toast.makeText(context, "Copied Code: $joinCode", Toast.LENGTH_SHORT).show()
-                    }
-            ) {
-                Column(
+            // 👇 Chỉ hiện Join Code nếu là ADMIN
+            if (isAdmin) {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                     modifier = Modifier
-                        .padding(16.dp)
-                        .fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp)
+                        .clickable {
+                            clipboardManager.setText(AnnotatedString(joinCode))
+                            Toast.makeText(context, "Copied Code: $joinCode", Toast.LENGTH_SHORT).show()
+                        }
                 ) {
-                    Text(
-                        text = "Group Join Code",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = "Group Join Code",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
 
-                    Text(
-                        text = joinCode,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                        letterSpacing = 2.sp
-                    )
+                        Text(
+                            text = joinCode,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 2.sp
+                        )
 
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Tap to copy",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Tap to copy",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            }
 
-            Divider()
-            Spacer(modifier = Modifier.height(16.dp))
+                Divider()
+                Spacer(modifier = Modifier.height(16.dp))
+            }
 
             Text(
                 text = "Blocked Apps List",
@@ -124,17 +135,19 @@ fun GroupSettingsScreen(
             )
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 👇 DANH SÁCH APP CHẶN (CODE CŨ)
             if (rules.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize().weight(1f), contentAlignment = Alignment.Center) {
-                    Text("No rules configured yet. Tap + to add.", style = MaterialTheme.typography.bodyMedium)
+                    val msg = if (isAdmin) "No rules configured yet. Tap + to add." else "No rules active."
+                    Text(msg, style = MaterialTheme.typography.bodyMedium)
                 }
             } else {
                 LazyColumn(modifier = Modifier.weight(1f)) {
                     items(rules) { rule ->
                         GroupRuleItem(
                             rule = rule,
+                            isEditable = isAdmin, // 👇 Truyền quyền Edit vào Item
                             onToggle = { isBlocked ->
+                                // ViewModel đã xử lý logic gửi API, chỉ Admin mới gọi được nhờ check ở UI Switch
                                 viewModel.updateGroupRule(context, groupId, rule.packageName, isBlocked)
                             }
                         )
@@ -198,6 +211,7 @@ fun SelectAppDialog(
 @Composable
 fun GroupRuleItem(
     rule: GroupRuleDTO,
+    isEditable: Boolean, // 👇 Tham số mới để check quyền
     onToggle: (Boolean) -> Unit
 ) {
     Card(
@@ -228,8 +242,10 @@ fun GroupRuleItem(
                 Text(text = info, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.secondary)
             }
 
+            // 👇 Disable Switch nếu không phải Admin
             Switch(
                 checked = rule.isBlocked,
+                enabled = isEditable,
                 onCheckedChange = { isChecked ->
                     onToggle(isChecked)
                 }

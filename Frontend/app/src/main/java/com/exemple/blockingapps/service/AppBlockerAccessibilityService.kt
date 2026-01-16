@@ -15,7 +15,6 @@ class AppBlockerAccessibilityService : AccessibilityService() {
 
     private lateinit var fusedLocationClient: FusedLocationProviderClient
 
-    
     private var isInsideTargetZone = false
 
     override fun onServiceConnected() {
@@ -26,10 +25,9 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        
+
         if (event == null) return
 
-        
         if (event.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED &&
             event.eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
             return
@@ -37,30 +35,33 @@ class AppBlockerAccessibilityService : AccessibilityService() {
 
         val packageName = event.packageName?.toString() ?: return
 
-        
-        
-        if (packageName == this.packageName || 
-            packageName == "com.android.systemui" || 
-            packageName == "com.android.settings" || 
-            packageName.contains("launcher") || 
-            packageName.contains("inputmethod") 
+        if (packageName == this.packageName ||
+            packageName == "com.android.systemui" ||
+            packageName == "com.android.settings" ||
+            packageName.contains("launcher") ||
+            packageName.contains("inputmethod")
         ) {
             return
         }
 
-        
-        Log.d("BlockService", "Checking App: $packageName | Zone: $isInsideTargetZone")
+        // Log.d("BlockService", "Checking App: $packageName | Zone: $isInsideTargetZone")
 
-        
-        if (BlockManager.isAppBlocked(this, packageName, isInsideTargetZone)) {
-            Log.d("BlockService", "BLOCCCKED: $packageName")
-            showBlockScreen()
+        // 👇 CẬP NHẬT QUAN TRỌNG: Lấy lý do chặn thay vì chỉ kiểm tra True/False
+        val blockReason = BlockManager.getBlockReason(this, packageName, isInsideTargetZone)
+
+        if (blockReason != null) {
+            Log.d("BlockService", "BLOCKED: $packageName. Reason: $blockReason")
+            // Truyền lý do vào hàm hiển thị
+            showBlockScreen(blockReason)
         }
     }
 
-    private fun showBlockScreen() {
+    // 👇 CẬP NHẬT: Nhận tham số reason
+    private fun showBlockScreen(reason: String) {
         val intent = Intent(this, BlockPageActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            // 👇 Gửi lý do sang Activity
+            putExtra("BLOCK_REASON", reason)
         }
         startActivity(intent)
     }
@@ -68,14 +69,12 @@ class AppBlockerAccessibilityService : AccessibilityService() {
     @SuppressLint("MissingPermission")
     private fun startBackgroundLocationUpdates() {
         try {
-            
             val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5000).build()
 
             fusedLocationClient.requestLocationUpdates(locationRequest, object : LocationCallback() {
                 override fun onLocationResult(locationResult: LocationResult) {
                     val location = locationResult.lastLocation ?: return
 
-                    
                     val target = LocationPrefs.getTargetLocation(this@AppBlockerAccessibilityService)
 
                     if (target == null) {
@@ -92,7 +91,6 @@ class AppBlockerAccessibilityService : AccessibilityService() {
                     val distanceInMeters = results[0]
                     val radius = target.third
 
-                    
                     val wasInside = isInsideTargetZone
                     isInsideTargetZone = distanceInMeters <= radius
 

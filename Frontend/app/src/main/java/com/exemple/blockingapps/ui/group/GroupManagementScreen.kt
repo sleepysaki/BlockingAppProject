@@ -1,23 +1,28 @@
 package com.exemple.blockingapps.ui.group
 
 import android.os.Build
-import android.util.Log
 import androidx.annotation.RequiresApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Group
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.exemple.blockingapps.model.GroupDTO
+import com.exemple.blockingapps.model.GroupMember
 import com.exemple.blockingapps.ui.home.HomeViewModel
 
 @RequiresApi(Build.VERSION_CODES.O)
@@ -27,19 +32,27 @@ fun GroupManagementScreen(
     viewModel: HomeViewModel,
     onBack: () -> Unit
 ) {
-    // Collecting state with lifecycle awareness
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val groupMembers by viewModel.groupMembers.collectAsStateWithLifecycle() // Get member list from ViewModel
+
     var showCreateDialog by remember { mutableStateOf(false) }
 
-    val currentUserId = "36050457-f112-4762-a7f7-24daab6986ce"
+    // FIXED: Changed type from UserGroup? to GroupDTO? to match the data source
+    var selectedGroupForManagement by remember { mutableStateOf<GroupDTO?>(null) }
 
-    // Debugging UI state changes
-    LaunchedEffect(uiState.groups) {
-        Log.d("GROUP_UI", "UI Recomposing. Groups in state: ${uiState.groups.size}")
-    }
+    val context = LocalContext.current
+    // NOTE: In production, get userId from UserPreferences or ViewModel
+    val currentUserId = "36050457-f112-4762-a7f7-24daab6986ce"
 
     LaunchedEffect(Unit) {
         viewModel.fetchUserGroups(currentUserId)
+    }
+
+    // Load members immediately when a group is selected
+    LaunchedEffect(selectedGroupForManagement) {
+        selectedGroupForManagement?.let {
+            viewModel.fetchGroupMembers(it.groupId)
+        }
     }
 
     Scaffold(
@@ -73,7 +86,7 @@ fun GroupManagementScreen(
                     Text("Create Group")
                 }
                 Button(
-                    onClick = { /* Join logic */ },
+                    onClick = { /* Join logic (already handled in GroupSettings) */ },
                     modifier = Modifier.weight(1f),
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
                 ) {
@@ -84,74 +97,33 @@ fun GroupManagementScreen(
             Spacer(modifier = Modifier.height(24.dp))
             Text("My Groups", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
 
-            // Display total count for confirmation during testing
-            if (uiState.groups.isNotEmpty()) {
-                Text("Total: ${uiState.groups.size}", fontSize = 12.sp, color = Color.Gray)
-            }
-
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            // Loading Indicator
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                     CircularProgressIndicator()
                 }
             }
 
-            // Group List logic
             if (uiState.groups.isEmpty() && !uiState.isLoading) {
                 Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
                     Text("You haven't joined any groups yet.", color = Color.Gray)
                 }
             } else {
-                // Wrap in a Box to ensure LazyColumn takes available space
                 Box(modifier = Modifier.weight(1f)) {
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         contentPadding = PaddingValues(bottom = 16.dp)
                     ) {
-                        items(
-                            items = uiState.groups,
-                            key = { it.groupId } // Essential for list updates
-                        ) { group ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(16.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Group,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(modifier = Modifier.width(16.dp))
-                                    Column {
-                                        Text(
-                                            text = group.groupName ?: "Unknown Group",
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 18.sp,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                        Text(
-                                            text = "Role: ${group.role ?: "Member"}",
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        if (group.inviteCode != null) {
-                                            Text(
-                                                text = "Code: ${group.inviteCode}",
-                                                fontSize = 10.sp,
-                                                color = Color.Gray
-                                            )
-                                        }
-                                    }
+                        items(items = uiState.groups, key = { it.groupId }) { group ->
+                            GroupItemCard(
+                                group = group,
+                                onClick = {
+                                    // Click on group to open Member Management Dialog
+                                    selectedGroupForManagement = group
                                 }
-                            }
+                            )
                         }
                     }
                 }
@@ -159,14 +131,199 @@ fun GroupManagementScreen(
         }
     }
 
+    // Create Group Dialog
     if (showCreateDialog) {
         CreateGroupDialog(
             onDismiss = { showCreateDialog = false },
             onConfirm = { name ->
-                viewModel.createGroup(name)
+                viewModel.createGroup(context, name, currentUserId)
                 showCreateDialog = false
             }
         )
+    }
+
+    // Member Management Dialog
+    if (selectedGroupForManagement != null) {
+        val group = selectedGroupForManagement!!
+        val isCurrentUserAdmin = group.role == "ADMIN"
+
+        MemberManagementDialog(
+            groupName = group.groupName,
+            members = groupMembers,
+            isCurrentUserAdmin = isCurrentUserAdmin,
+            currentUserId = currentUserId,
+            onDismiss = { selectedGroupForManagement = null },
+            onPromote = { targetUserId ->
+                viewModel.promoteMember(context, group.groupId, currentUserId, targetUserId)
+            },
+            onRemove = { targetUserId ->
+                viewModel.removeMember(context, group.groupId, currentUserId, targetUserId)
+            }
+        )
+    }
+}
+
+@Composable
+fun GroupItemCard(
+    group: GroupDTO,
+    // FIXED: Changed from (String) -> Unit to () -> Unit because the caller doesn't pass a String
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }, // Allow click
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.Group,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.width(16.dp))
+            Column {
+                Text(
+                    text = group.groupName,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Role: ${group.role}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (group.joinCode.isNotEmpty()) {
+                    Text(
+                        text = "Code: ${group.joinCode}",
+                        fontSize = 10.sp,
+                        color = Color.Gray
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun MemberManagementDialog(
+    groupName: String,
+    members: List<GroupMember>,
+    isCurrentUserAdmin: Boolean,
+    currentUserId: String,
+    onDismiss: () -> Unit,
+    onPromote: (String) -> Unit,
+    onRemove: (String) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Members: $groupName") },
+        text = {
+            if (members.isEmpty()) {
+                Text("Loading members...", modifier = Modifier.padding(16.dp))
+            } else {
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 400.dp) // Limit height
+                ) {
+                    items(members) { member ->
+                        MemberItem(
+                            member = member,
+                            isCurrentUserAdmin = isCurrentUserAdmin,
+                            isSelf = member.userId == currentUserId,
+                            onPromote = { onPromote(member.userId) },
+                            onRemove = { onRemove(member.userId) }
+                        )
+                        HorizontalDivider()
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        }
+    )
+}
+
+@Composable
+fun MemberItem(
+    member: GroupMember,
+    isCurrentUserAdmin: Boolean,
+    isSelf: Boolean,
+    onPromote: () -> Unit,
+    onRemove: () -> Unit
+) {
+    var showMenu by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        // --- User Info Section ---
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                tint = Color.Gray,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(12.dp))
+            Column {
+                Text(
+                    text = member.fullName + (if (isSelf) " (You)" else ""),
+                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = member.role,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (member.role == "ADMIN") MaterialTheme.colorScheme.primary else Color.Gray
+                )
+            }
+        }
+
+        // --- Action Section ---
+        // Only show actions if current user is Admin and target is not Self
+        if (isCurrentUserAdmin && !isSelf) {
+            Box {
+                // ICON CHANGE IS HERE: Use MoreVert (3 dots) instead of Delete
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(Icons.Default.MoreVert, contentDescription = "More Options")
+                }
+
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false }
+                ) {
+                    // Option 1: Promote to Admin (Hide if already Admin)
+                    if (member.role != "ADMIN") {
+                        DropdownMenuItem(
+                            text = { Text("Promote to Admin") },
+                            onClick = {
+                                showMenu = false
+                                onPromote()
+                            }
+                        )
+                    }
+
+                    // Option 2: Remove Member
+                    DropdownMenuItem(
+                        text = { Text("Remove from Group", color = Color.Red) },
+                        onClick = {
+                            showMenu = false
+                            onRemove()
+                        }
+                    )
+                }
+            }
+        }
     }
 }
 
